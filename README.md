@@ -1,6 +1,6 @@
 # SmartHomeControl
 
-This is Swiss army knife of a project. It is born from the desire to play with the control of smart home devices without having to run a Home Assistant server. It does the following:
+This is a Swiss army knife of a ESP8266 project. It is born from the desire to play with the control of smart home devices without having to run a Home Assistant server. It does the following:
 1) Creates a web interface for turning on/off several devices in one panel.
 2) Creates a web interface for controlling a TV with an IR blaster.
 3) Simulates Wemo devices with Fauxmo to allow voice control using an Echo device.
@@ -21,7 +21,7 @@ To flash littlefs.bin click the ant logo, and click Upload Filesystem Image.
 
 **A few accomplishments I'm particularly proud of**
 
-To correctly write a littefs.bin that is uploaded via the webpage's OTA method requires having the exact size of the bin file. However, when uploading a file the header's Content-Length is the size of the bin file plus the number of bytes in the header and footer. The header and footer size varies between browsers so it's impossible to get the actual size of the bin file using request->contentLength(). To work around this I used a hidden filesize parameter to the select_bin html page which is set and sent alongside the bin file when the upload is started:
+To correctly write a littefs.bin that is uploaded via the webpage's OTA method requires having the exact size of the bin file. However, when uploading a file the header's Content-Length is the size of the bin file plus the number of bytes in the header and footer. The header and footer size varies between browsers so it's impossible to get the actual size of the bin file using request->contentLength(). To work around this I used a hidden filesize parameter in the select_bin html page which is set and sent alongside the bin file when the upload is started:
 	document.querySelector('form').addEventListener('submit', (e) => {
 		document.getElementById('filesize').value = document.getElementById('file').files[0].size;
 		...
