@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang=\“en\“ class=""><head>
+<meta charset='utf-8'>
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"/>
+<style>
+	div,
+	fieldset,
+	input,
+	select {
+		padding: 5px;
+		font-size: 1em;
+	}
+
+	fieldset {
+		background: #4f4f4f;
+	}
+
+	p {
+		margin: 0.5em 0;
+	}
+
+	input {
+		width: 100%;
+		box-sizing: border-box;
+		-webkit-box-sizing: border-box;
+		-moz-box-sizing: border-box;
+		background: #dddddd;
+		color: #000000;
+	}
+
+	input[type=checkbox],
+	input[type=radio] {
+		width: 1em;
+		margin-right: 6px;
+		vertical-align: -1px;
+	}
+
+	input[type=range] {
+		width: 99%;
+	}
+
+	select {
+		width: 100%;
+		background: #dddddd;
+		color: #000000;
+	}
+
+	textarea {
+		resize: vertical;
+		width: 98%;
+		height: 318px;
+		padding: 5px;
+		overflow: auto;
+		background: #1f1f1f;
+		color: #65c115;
+	}
+
+	body {
+		text-align: center;
+		font-family: verdana, sans-serif;
+		background: black;
+	}
+
+	td {
+		padding: 0px;
+	}
+
+	button {
+		border: 0;
+		border-radius: 0.3rem;
+		background: #1fa3ec;
+		color: #faffff;
+		line-height: 2.4rem;
+		font-size: 1.2rem;
+		width: 100%;
+		-webkit-transition-duration: 0.4s;
+		transition-duration: 0.4s;
+		cursor: pointer;
+	}
+
+	button:hover {
+		background: #0e70a4;
+	}
+
+	.bred {
+		background: #d43535;
+	}
+
+	.bred:hover {
+		background: #931f1f;
+	}
+
+	.bgrn {
+		background: #47c266;
+	}
+
+	.bgrn:hover {
+		background: #5aaf6f;
+	}
+
+	a {
+		color: #1fa3ec;
+		text-decoration: none;
+	}
+
+	.p {
+		float: left;
+		text-align: left;
+	}
+
+	.q {
+		float: right;
+		text-align: right;
+	}
+
+	.r {
+		border-radius: 0.3em;
+		padding: 2px;
+		margin: 6px 2px;
+	}
+</style>
+<script type = "text/javascript">
+
+	var ws = null;
+	var timeoutId;
+
+/*
+	function open_websocket() {
+		ws = new WebSocket("ws://192.168.1.200/consolews");
+
+		ws.onopen = function (evt) {
+			clearInterval(refreshIntervalId);
+		};
+		
+		ws.onclose = function (evt) { 
+			refreshIntervalId = setInterval(open_websocket, 1000);
+		};
+		
+		ws.onmessage = function (evt) { 
+			update_output(evt.data);
+		};
+	}
+*/	
+	
+	function open_websocket() {
+		ws = new WebSocket(socket_base_URL + '/consolews');
+
+		ws.onopen = function(e) {
+			console.log('Socket opened.');
+			clearTimeout(timeoutId);
+			setTimeout(check_connection, 5000);
+		};
+		
+		ws.onclose = function(e) {
+			console.log('Socket closed.');
+			setTimeout(open_websocket, 1000);
+		};
+
+		ws.onerror = function(err) {
+			console.error('Socket error.');
+			ws.close();
+		};
+	
+		ws.onmessage = function (evt) {
+			if (evt.data != '#r') {
+				update_output(evt.data);
+			}
+			else {
+				clearTimeout(timeoutId);
+				setTimeout(check_connection, 5000);
+			}
+		};
+	}
+	
+	function update_output(text) {
+		var output = document.getElementById('output');
+		//https://stackoverflow.com/questions/2388115/get-locale-short-date-format-using-javascript
+		var ts = new Date().toLocaleString('en-US', {month: '2-digit', day: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).substr(12,8);
+		output.value += ts + " - " + text;
+	}
+
+	function send_data() {
+		var input = document.getElementById("input");
+		ws.send(input.value);
+		update_output("'"+input.value+"' sent.");
+		input.value = '';
+		return false; // must return false so page doesn't reload
+	}
+	
+	function check_connection() {
+		ws.send('#c');
+		timeoutId = setTimeout(function(){ws.close()}, 10000);
+	}
+
+	var socket_base_URL = 'ws://' + window.location.hostname;
+	if (socket_base_URL == 'ws://') {
+		socket_base_URL = 'ws://192.168.1.60';
+		//socket_base_URL = 'ws://192.168.1.200'; // for testing on the bench device which has a different IP
+	}
+	
+	open_websocket();
+
+</script>
+
+</head>
+
+<body>
+   <div style="text-align:left;display:inline-block;color:#eaeaea;min-width:340px;">
+      <div style="text-align:center;color:#eaeaea;">
+	<h2>Output</h2>
+      </div>
+      <br>
+      <textarea readonly="" id="output" cols="340" name="t1" wrap="off"></textarea>
+      <br><br>
+      <form method="get" onsubmit="return send_data();"><input id="input" placeholder="Send text" autofocus="" name="c1"><br></form>
+      <div></div>
+      <p></p>
+      <form action="." method="get"><button name="">Main Menu</button></form>
+   </div>
+   
+      <!--div>
+	<button onclick = "OpenWebsocket()" id = "connectButton">CONNECT</button>
+	<button onclick = "CloseWebsocket()" disabled = "true" id = "disconnectButton">DISCONNECT</button>
+      </div-->
+
+      <!--div>
+	<input type = "text" disabled = "true" id = "inputText"></input>
+	<button onclick = "SendData()"  disabled = "true" id = "sendButton">SEND</button>
+      </div-->
+   
+</body>
+</html>
