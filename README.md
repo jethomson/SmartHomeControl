@@ -36,8 +36,8 @@ I updated the NTPClient library to use the Timezone library so manual adjustment
 
 data/smart_devices.json is used to generate the smart device controls that appear on the web page. To add or remove devices you simply edit the json file instead of editing the web page.
 
-
-Note the CORS command has been disabled by default in TAMOTA v10.0.0 and v10.0.1 until they come up with a safer implementation.
+**CORS Note**
+The CORS command has been disabled by default in TAMOTA v10.0.0 and v10.0.1 until they come up with a safer implementation.
 See https://github.com/arendst/Tasmota/pull/12827
 This project requires the CORS command to be working for the interface to display the state of a device. As a workaround you can use an older version of TASMOTA or compile a newer version with #define USE_CORS uncommented in tasmota/my_user_config.h
 See https://tasmota.github.io/docs/Gitpod/ for info on how to compile TAMOTA online.
