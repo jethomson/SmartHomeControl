@@ -34,6 +34,8 @@
 #include <ESPAsyncWebServer.h>
 #include <AsyncHttpClient.h>
 
+#include <ESP8266Ping.h>
+
 #include <WebSerial.h>
 
 #ifdef ESP8266
@@ -69,6 +71,12 @@
 
 #include <string.h>
 using namespace std;
+
+
+
+#define NUM_T1_INTERVALS 450 // 450 * ticks = 450 * 2 s = 900 s = 15 minutes
+const uint32_t ticks = 625000; // 2 seconds. f = 80 MHz/256, T = 1/f, interval = 62500*T = 2 seconds
+const IPAddress phone_ip(192, 168, 1, 142);
 
 
 //#define DEBUG_CONSOLE Serial
@@ -129,6 +137,12 @@ const uint8_t min_brightness = 2;
 
 RCSwitch rf_switch = RCSwitch();
 
+enum PhoneStates {HERE, AWAY, INDETERMINATE};
+enum PhoneStates phone_state = INDETERMINATE;
+enum PD_Triggers {NONE = 0, TIMER = 1, DOOR = 2}; // states that for triggering a check for presence of a phone
+volatile enum PD_Triggers pd_trigger = NONE;
+volatile uint16_t t1_cntdwn = NUM_T1_INTERVALS; 
+
 fauxmoESP fauxmo;
 enum SmartCommand {DO_NOTHING, TV_ON, TV_OFF, PLAYPAUSE, CLOCK_ON, CLOCK_OFF};
 SmartCommand sc = DO_NOTHING;
@@ -152,14 +166,18 @@ bool group_power_states[10] = {true}; // ten (0-9) groups max
 
 bool restart_needed = false;
 
+
+
 void handle_clock(void);
 void handle_RF_command(void);
+void handle_presence_detection(void);
 void handle_smart_speaker_command(void);
 void handle_group_power_command(void);
 void transmit_IR_data();
 
 void transmit_IR_data(void);
 void http_cmnd(String);
+void hello_goodbye(void);
 size_t simple_JSON_parse(string, string, size_t, vector<string> &);
 void update_time(void);
 void set_sleep_time(void);
@@ -173,6 +191,16 @@ void web_server_initiate(void);
 void OTA_server_initiate(void);
 void clock_initiate(void);
 
+
+void IRAM_ATTR timer1_ISR() {
+	t1_cntdwn--;
+	if (t1_cntdwn) {
+		timer1_write(ticks);
+	}
+	else {
+		pd_trigger = TIMER;
+	}
+}
 
 void handle_clock() {
 	static uint16_t interval = PERIOD;
@@ -281,21 +309,45 @@ void handle_RF_command() {
 				http_cmnd("http://192.168.1.50/cm?cmnd=POWER%20TOGGLE"); //kitchen
 				break;
 			case 6902456: //middle button
-				http_cmnd("http://192.168.1.51/cm?cmnd=POWER%20TOGGLE"); //hallway
+				//http_cmnd("http://192.168.1.51/cm?cmnd=POWER%20TOGGLE"); //hallway
 				//http_cmnd("http://192.168.1.62/cm?cmnd=POWER%20TOGGLE"); //dining
 				//http_cmnd("http://192.168.1.61/cm?cmnd=POWER%20TOGGLE"); //den
+				http_cmnd("http://192.168.1.66/cm?cmnd=POWER%20TOGGLE"); //lamp
 				break;
 			case 6902450: //right button
 				group_power_flag = 1;
 				group_power_states[group_power_flag] = !group_power_states[group_power_flag];
 				break;
+			case 15723561: //front door - Sonoff DW1
+				pd_trigger = DOOR;
+				break;
 			case 0:
 				break;
 			default:
+				DEBUG_CONSOLE.print("unknown RF: ");
+				DEBUG_CONSOLE.println(value);
 				break;
 			}
 		}
 		rf_switch.resetAvailable();
+	}
+}
+
+void handle_presence_detection() {
+	if (pd_trigger != NONE) {
+		pd_trigger = NONE;
+		// if there is a pd_trigger check for presence of phone by pinging it.
+		phone_state = Ping.ping(phone_ip, 1) ? HERE : AWAY;
+		if (phone_state != HERE) {
+			// try again when ping fails with more pings to be more certain phone is not here
+			// because it's annoying for the lights to turn out when you are home because of a missed ping
+			phone_state = Ping.ping(phone_ip, 5) ? HERE : AWAY; // 5 pings
+		}
+
+		hello_goodbye();
+
+		t1_cntdwn = NUM_T1_INTERVALS;
+		timer1_write(ticks);
 	}
 }
 
@@ -341,7 +393,6 @@ void handle_group_power_command() {
 		if (group_power_states[group_power_flag]) {
 			switch_key = "switch_on";
 			group_state = "on";
-
 		}
 		else {
 			switch_key = "switch_off";
@@ -379,7 +430,7 @@ void handle_group_power_command() {
 				}
 				else {
 					// sending web commands from device to the same device doesn't work, so execute locally
-					WebSerial.println("execute locally");
+					DEBUG_CONSOLE.println("execute locally");
 					string s = power_cmnds[i];
 					size_t start = s.find("=");
 					if (start != string::npos && start < s.length()-1 ) {
@@ -388,11 +439,11 @@ void handle_group_power_command() {
 						if (start != string::npos) {
 							s.replace(start, 3, " ");
 						}
-						WebSerial.println(s.c_str());
+						DEBUG_CONSOLE.println(s.c_str());
 						process_cmnd(&s[0]);
 					}
 					else {
-						WebSerial.println("invalid command");
+						DEBUG_CONSOLE.println("invalid command");
 					}
 				}
 			}
@@ -413,6 +464,52 @@ void http_cmnd(String URL) {
 	if (WiFi.status() == WL_CONNECTED) {
 		ahClient.init("GET", URL);
 		ahClient.send();
+	}
+}
+
+/*
+void hello_goodbye() {
+	static enum PhoneStates prev_state = INDETERMINATE;
+	if (phone_state == HERE && prev_state != phone_state) {
+		prev_state = phone_state;
+		DEBUG_PRINTLN("hello");
+		http_cmnd("http://192.168.1.50/cm?cmnd=POWER%20ON"); //kitchen
+
+	}
+	else if (phone_state == AWAY && prev_state != phone_state) {
+		prev_state = phone_state;
+		DEBUG_PRINTLN("goodbye");
+		//http_cmnd("http://192.168.1.50/cm?cmnd=POWER%20OFF"); //kitchen. for testing.
+		http_cmnd("http://192.168.1.60/cm?cmnd=Group0%20OFF"); //everything off
+	}
+	else {
+		DEBUG_PRINTLN("no change");
+	}
+}
+*/
+
+void hello_goodbye() {
+	static enum PhoneStates prev_state = INDETERMINATE;
+	if (phone_state == HERE) {
+		if (phone_state != prev_state) {
+			prev_state = phone_state;
+			DEBUG_PRINTLN("pd: hello");
+			http_cmnd("http://192.168.1.50/cm?cmnd=POWER%20ON"); //kitchen
+		}
+		else {
+			DEBUG_PRINTLN("pd: still here");
+		}
+	}
+	else if (phone_state == AWAY) {
+		if (phone_state != prev_state) {
+			prev_state = phone_state;
+			DEBUG_PRINTLN("pd: goodbye");
+			//http_cmnd("http://192.168.1.50/cm?cmnd=POWER%20OFF"); //kitchen. for testing.
+			process_cmnd("Group0 OFF"); //everything off
+		}
+		else {
+			DEBUG_PRINTLN("pd: still away");
+		}
 	}
 }
 
@@ -450,6 +547,7 @@ void update_time() {
 	uint8_t s = 0;
 
 	if (timeClient.update()) {
+		DEBUG_PRINT("ut: ");
 		DEBUG_PRINTLN(timeClient.getFormattedTime());
 		time_update_needed = false;
 		s = timeClient.getSeconds();
@@ -560,7 +658,7 @@ void handle_flash_bin(AsyncWebServerRequest *request, const String &filename, si
 		}
 		else {
 			Serial.println("Update complete");
-			//WebSerial.println("Update complete");
+			//DEBUG_CONSOLE.println("Update complete");
 			Serial.flush();
 			restart_needed = true;
 		}
@@ -918,7 +1016,7 @@ void setup() {
 				process_cmnd(buf);
 			}
 			else {
-				WebSerial.print("#r");
+				DEBUG_CONSOLE.print("#r");
 			}
         }
 	});
@@ -944,8 +1042,16 @@ void setup() {
 
 	clock_initiate();
 
+	//setup presence detection timer
+	t1_cntdwn = 1; // at power on have timer1 pd_trigger check for phone after 1 interval of ticks
+	timer1_attachInterrupt(timer1_ISR);
+	timer1_enable(TIM_DIV256, TIM_EDGE, TIM_SINGLE);
+	timer1_write(ticks);
+
 	//ESP.wdtEnable(4000); //[ms], parameter is required but ignored
 }
+
+
 
 void loop() {
 	//ESP.wdtFeed();
@@ -959,6 +1065,7 @@ void loop() {
 
 	handle_clock();
 	handle_RF_command();
+	handle_presence_detection();
 	// fauxmoESP uses an async TCP server, but also a sync UDP server; therefore, we have to manually poll for UDP packets.
 	fauxmo.handle();
 	handle_smart_speaker_command();
