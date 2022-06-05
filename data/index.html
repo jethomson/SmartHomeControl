@@ -266,7 +266,7 @@
 		    filter: blur(0px);
 		}
 	}
-  </style>
+	</style>
 </head>
 <body>
 <div style="display:inline-block">
@@ -278,6 +278,9 @@
 		</div>
 	  	<div id="console_button" class="grid-item-button">
 			<a href="/console"><button name="">Console</button></a>
+		</div>
+	  	<div id="console_button" class="grid-item-button">
+			<a href="/access_log"><button name="">Access Log</button></a>
 		</div>
 	  	<!--div class="grid-item-button" style="display: none"-->
 	  	<div class="grid-item-button">
@@ -316,9 +319,9 @@ function make_request(URL, element) {
 			xmlhttp.ontimeout = function() {element.style.setProperty('--switch-color', 'red');};
 		}
 		else if (element.id.startsWith("smart_text")) {
-			xmlhttp.onerror   = function() {element.parentElement.style.color = "red";};
-			xmlhttp.onabort   = function() {element.parentElement.style.color = "red";};
-			xmlhttp.ontimeout = function() {element.parentElement.style.color = "red";};
+			xmlhttp.onerror   = function() {element.parentElement.style.color = "red"; update_smart_text(element, '{}')};
+			xmlhttp.onabort   = function() {element.parentElement.style.color = "red"; update_smart_text(element, '{}')};
+			xmlhttp.ontimeout = function() {element.parentElement.style.color = "red"; update_smart_text(element, '{}')};
 		}
 	}
 
@@ -439,7 +442,7 @@ function update_smart_text(element, responseText) {
 	if (typeof t2 !== "undefined") {
 		avg = process_current(presponse.StatusSNS.ENERGY.Current);
 	}
-	
+	console.log(element.id+' average current: '+avg);
 	//if ( (t1 && presponse[POWERx].toUpperCase() == "ON") || (t2 && (0.195 < avg && avg < tv_sleep_current_ub)) ) {
 	if ( (t1 && presponse[POWERx].toUpperCase() == "ON") || (typeof t2 !== "undefined" && (tv_sleep_current_lb < avg && avg < tv_sleep_current_ub)) ) {
 		element.innerText = element.getAttribute("aux_text");

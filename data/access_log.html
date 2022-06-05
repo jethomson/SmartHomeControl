@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en" class="">
+<head>
+	<meta charset='utf-8'>
+	<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no" />
+	<title>Smart Home Control Access Log</title>
+	
+<style>
+	pre {
+	 	margin-top: 0px;
+		margin-bottom: 0px;
+	}
+</style>
+</head>
+<body>
+<div id="log_div">
+<pre id="logP"></pre>
+<pre id="logC"></pre>
+</div>
+
+<script>	
+	
+function fetch_log(id) {
+		var xmlhttp = new XMLHttpRequest();
+		xmlhttp.onreadystatechange = function() {
+			if (this.readyState == 4 && this.status == 200) {
+				document.getElementById(id).innerHTML = this.responseText;
+			}
+		};
+
+		xmlhttp.onerror   = function() {console.log(id+" onerror")};
+		xmlhttp.onabort   = function() {console.log(id+" onabort")};
+		xmlhttp.ontimeout = function() {console.log(id+" ontimeout")};
+
+
+		var log_path = "/access_"+id+".txt";
+		xmlhttp.open("GET", server_base_URL+log_path, true);
+		xmlhttp.timeout = 1500;
+		xmlhttp.send();
+}
+
+var server_base_URL = window.location.protocol + "//" + window.location.hostname;
+
+fetch_log("logP");
+fetch_log("logC");
+
+</script>
+</body>
+</html>

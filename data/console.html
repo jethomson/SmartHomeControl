@@ -1,8 +1,10 @@
 <!DOCTYPE html>
-<html lang=\“en\“ class=""><head>
-<meta charset='utf-8'>
-<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"/>
-<style>
+<html lang=\“en\“ class="">
+<head>
+	<meta charset='utf-8'>
+	<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"/>
+	<title>Smart Home Control Console</title>
+	<style>
 	div,
 	fieldset,
 	input,
@@ -118,42 +120,64 @@
 		padding: 2px;
 		margin: 6px 2px;
 	}
-</style>
+	</style>
 <script type = "text/javascript">
 
-	var ws = null;
-	var timeoutId;
-
-/*
-	function open_websocket() {
-		ws = new WebSocket("ws://192.168.1.200/consolews");
-
-		ws.onopen = function (evt) {
-			clearInterval(refreshIntervalId);
-		};
-		
-		ws.onclose = function (evt) { 
-			refreshIntervalId = setInterval(open_websocket, 1000);
-		};
-		
-		ws.onmessage = function (evt) { 
-			update_output(evt.data);
-		};
+	function print_reason(e) {
+		var reason;
+		//console.log(e.code);
+		// See https://www.rfc-editor.org/rfc/rfc6455#section-7.4.1
+		if (e.code == 1000)
+			reason = "Normal closure, meaning that the purpose for which the connection was established has been fulfilled.";
+		else if(e.code == 1001)
+			reason = "An endpoint is \"going away\", such as a server going down or a browser having navigated away from a page.";
+		else if(e.code == 1002)
+			reason = "An endpoint is terminating the connection due to a protocol error";
+		else if(e.code == 1003)
+			reason = "An endpoint is terminating the connection because it has received a type of data it cannot accept (e.g., an endpoint that understands only text data MAY send this if it receives a binary message).";
+		else if(e.code == 1004)
+			reason = "Reserved. The specific meaning might be defined in the future.";
+		else if(e.code == 1005)
+			reason = "No status code was actually present.";
+		else if(e.code == 1006)
+		   reason = "The connection was closed abnormally, e.g., without sending or receiving a Close control frame";
+		else if(e.code == 1007)
+			reason = "An endpoint is terminating the connection because it has received data within a message that was not consistent with the type of the message (e.g., non-UTF-8 [https://www.rfc-editor.org/rfc/rfc3629] data within a text message).";
+		else if(e.code == 1008)
+			reason = "An endpoint is terminating the connection because it has received a message that \"violates its policy\". This reason is given either if there is no other sutible reason, or if there is a need to hide specific details about the policy.";
+		else if(e.code == 1009)
+		   reason = "An endpoint is terminating the connection because it has received a message that is too big for it to process.";
+		else if(e.code == 1010) // Note that this status code is not used by the server, because it can fail the WebSocket handshake instead.
+			reason = "An endpoint (client) is terminating the connection because it has expected the server to negotiate one or more extension, but the server didn't return them in the response message of the WebSocket handshake. <br /> Specifically, the extensions that are needed are: " + e.reason;
+		else if(e.code == 1011)
+			reason = "A server is terminating the connection because it encountered an unexpected condition that preed it from fulfilling the request.";
+		else if(e.code == 1015)
+			reason = "The connection was closed due to a failure to perform a TLS handshake (e.g., the server certificate can't be verified).";
+		else
+			reason = "Unknown reason";
+		console.log(reason);
 	}
-*/	
+	
+
+	var ws = null;
+	var close_timeoutId;
+	var check_timeoutId;
+
 	
 	function open_websocket() {
 		ws = new WebSocket(socket_base_URL + '/consolews');
 
 		ws.onopen = function(e) {
 			console.log('Socket opened.');
-			clearTimeout(timeoutId);
-			setTimeout(check_connection, 5000);
+			check_connection();
 		};
 		
 		ws.onclose = function(e) {
 			console.log('Socket closed.');
-			setTimeout(open_websocket, 1000);
+			clearTimeout(close_timeoutId);
+			clearTimeout(check_timeoutId);
+			//print_reason(e);
+			open_websocket();
 		};
 
 		ws.onerror = function(err) {
@@ -162,13 +186,15 @@
 		};
 	
 		ws.onmessage = function (evt) {
-			if (evt.data != '#r') {
-				update_output(evt.data);
+			if (evt.data == '#r') {
+				console.log('received #r');
+				clearTimeout(close_timeoutId);
+				clearTimeout(check_timeoutId);
+				check_timeoutId = setTimeout(check_connection, 5000);
 			}
 			else {
-				clearTimeout(timeoutId);
-				setTimeout(check_connection, 5000);
-			}
+				update_output(evt.data);
+			}		
 		};
 	}
 	
@@ -196,7 +222,9 @@
 	
 	function check_connection() {
 		ws.send('#c');
-		timeoutId = setTimeout(function(){ws.close()}, 10000);
+		console.log('sent #c');
+		clearTimeout(close_timeoutId);
+		close_timeoutId = setTimeout(function(){console.log('response window timed out.'); ws.close();}, 10000);
 	}
 
 	var socket_base_URL = 'ws://' + window.location.hostname;
@@ -208,32 +236,35 @@
 	open_websocket();
 
 </script>
-
 </head>
 
 <body>
-   <div style="text-align:left;display:inline-block;color:#eaeaea;min-width:340px;">
-      <div style="text-align:center;color:#eaeaea;">
-	<h2>Output</h2>
-      </div>
-      <br>
-      <textarea readonly="" id="output" cols="340" name="t1" wrap="off"></textarea>
-      <br><br>
-      <form method="get" onsubmit="return send_data();"><input id="input" placeholder="Send text" autofocus="" name="c1"><br></form>
-      <div></div>
-      <p></p>
-      <form action="." method="get"><button name="">Main Menu</button></form>
-   </div>
-   
-      <!--div>
-	<button onclick = "OpenWebsocket()" id = "connectButton">CONNECT</button>
-	<button onclick = "CloseWebsocket()" disabled = "true" id = "disconnectButton">DISCONNECT</button>
-      </div-->
+	<div style="text-align:left;display:inline-block;color:#eaeaea;min-width:340px;">
+		<div style="text-align:center;color:#eaeaea;">
+			<h2>Output</h2>
+			If you are having trouble with OTA updating, close this page.
+		</div>
+		<br>
+		<textarea readonly="" id="output" cols="340" name="t1" wrap="off"></textarea>
+		<br><br>
+		<form method="get" onsubmit="return send_data();"><input id="input" placeholder="Send text" autofocus="" name="c1"><br></form>
+		<div></div>
+		<p></p>
+		<!-- <form action="." method="get"><button name="">Main Menu</button></form> -->
+		<div id="home_button" class="grid-item-button">
+			<a href="."><button name="">Main Menu</button></a>
+		</div>
+	</div>
+	
+	<!--div>
+		<button onclick = "OpenWebsocket()" id = "connectButton">CONNECT</button>
+		<button onclick = "CloseWebsocket()" disabled = "true" id = "disconnectButton">DISCONNECT</button>
+	</div-->
 
-      <!--div>
-	<input type = "text" disabled = "true" id = "inputText"></input>
-	<button onclick = "SendData()"  disabled = "true" id = "sendButton">SEND</button>
-      </div-->
-   
+	<!--div>
+		<input type = "text" disabled = "true" id = "inputText"></input>
+		<button onclick = "SendData()"  disabled = "true" id = "sendButton">SEND</button>
+	</div-->
+
 </body>
 </html>

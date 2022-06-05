@@ -73,9 +73,15 @@
 using namespace std;
 
 
-
-#define NUM_T1_INTERVALS 450 // 450 * ticks = 450 * 2 s = 900 s = 15 minutes
-const uint32_t ticks = 625000; // 2 seconds. f = 80 MHz/256, T = 1/f, interval = 62500*T = 2 seconds
+//adjust these to your requirements
+#define LOCAL_IP IPAddress(192, 168, 1, 60)
+#define GATEWAY IPAddress(192, 168, 1, 1)
+#define SUBNET_MASK IPAddress(255, 255, 255, 0)
+#define DNS1 IPAddress(1, 1, 1, 1)
+#define DNS2 IPAddress(9, 9, 9, 9)
+const uint32_t PD_Phone_Check_Interval = 900000; // 15 minutes in ms. how often we look for presence of phone.
+const uint32_t PD_On_Away_Power_Off_Delay = 600000; // 10 minutes in ms. only want to power off if gone for an extended period of time.
+const uint32_t PD_WiFi_Connect_Delay = 120000; // 2 minutes in ms. allow time for phone to connect to WiFi.
 const IPAddress phone_ip(192, 168, 1, 142);
 
 
@@ -93,6 +99,7 @@ const IPAddress phone_ip(192, 168, 1, 142);
  #define DEBUG_PRINTF(...)
 #endif 
 
+#define MAX_PARAMETER_SIZE 100 // maximum number of characters in command and arguments combined
 
 #define LED 2 // onboard LED
 
@@ -137,11 +144,9 @@ const uint8_t min_brightness = 2;
 
 RCSwitch rf_switch = RCSwitch();
 
-enum PhoneStates {HERE, AWAY, INDETERMINATE};
-enum PhoneStates phone_state = INDETERMINATE;
-enum PD_Triggers {NONE = 0, TIMER = 1, DOOR = 2}; // states that for triggering a check for presence of a phone
-volatile enum PD_Triggers pd_trigger = NONE;
-volatile uint16_t t1_cntdwn = NUM_T1_INTERVALS; 
+enum class PhoneStates {HERE, AWAY};
+enum class PD_Triggers {NONE = 0, TIMER = 1, DOOR = 2};
+enum PD_Triggers pd_trigger = PD_Triggers::NONE;
 
 fauxmoESP fauxmo;
 enum SmartCommand {DO_NOTHING, TV_ON, TV_OFF, PLAYPAUSE, CLOCK_ON, CLOCK_OFF};
@@ -167,40 +172,32 @@ bool group_power_states[10] = {true}; // ten (0-9) groups max
 bool restart_needed = false;
 
 
-
 void handle_clock(void);
 void handle_RF_command(void);
 void handle_presence_detection(void);
 void handle_smart_speaker_command(void);
 void handle_group_power_command(void);
-void transmit_IR_data();
 
+void write_log(String);
+enum PhoneStates check_for_phone(void);
 void transmit_IR_data(void);
 void http_cmnd(String);
-void hello_goodbye(void);
 size_t simple_JSON_parse(string, string, size_t, vector<string> &);
-void update_time(void);
+bool update_time(int8_t);
 void set_sleep_time(void);
 void show_leds(void);
 void handle_flash_bin(AsyncWebServerRequest *, const String &, size_t, uint8_t *, size_t, bool);
-string process_cmnd(char *);
+string process_cmnd(char[]);
 
-void smart_devices_config_load(void);
-void fauxmo_initiate(void);
-void web_server_initiate(void);
+
+
 void OTA_server_initiate(void);
+void smart_devices_config_load(void);
+void web_server_initiate(void);
+void webserial_initiate(void);
+void fauxmo_initiate(void);
 void clock_initiate(void);
 
-
-void IRAM_ATTR timer1_ISR() {
-	t1_cntdwn--;
-	if (t1_cntdwn) {
-		timer1_write(ticks);
-	}
-	else {
-		pd_trigger = TIMER;
-	}
-}
 
 void handle_clock() {
 	static uint16_t interval = PERIOD;
@@ -215,7 +212,7 @@ void handle_clock() {
 
 	//calling update_time() based on a flag allows async function to exit quicker and creates some consistency
 	if (time_update_needed) {
-		update_time();
+		update_time(2);
 	}
 
 	if (set_sleep_time_flag) {
@@ -238,7 +235,7 @@ void handle_clock() {
 				// tic gets synced to seconds when update_time() succeeds but if update_time() fails tic will keep meeting the if condition
 				// therefore we should reset tic here to prevent this block from running repeatedly
 				tic = 0;
-				update_time();
+				update_time(2);
 
 				// turn off clock display at midnight
 				if (h == 0 && m == 0) {
@@ -293,7 +290,9 @@ void handle_clock() {
 	}
 }
 
+
 void handle_RF_command() {
+	static int last_good_value = 0;
 	static uint32_t pm = millis(); // previous millis
 	uint32_t dt = 0;
 
@@ -301,25 +300,32 @@ void handle_RF_command() {
 		int value = rf_switch.getReceivedValue();
 
 		dt = millis() - pm;
-		if (dt >= 1500) { // use a delay to prevent repeating commands
+		// compare to previous value to prevent repeats, override repeat check if enough time has passed
+		if (value != last_good_value || dt >= 1500) {
 			pm = millis();
 
 			switch (value) {
 			case 6902449: //left button
+				last_good_value = value;
 				http_cmnd("http://192.168.1.50/cm?cmnd=POWER%20TOGGLE"); //kitchen
 				break;
 			case 6902456: //middle button
+				last_good_value = value;
 				//http_cmnd("http://192.168.1.51/cm?cmnd=POWER%20TOGGLE"); //hallway
 				//http_cmnd("http://192.168.1.62/cm?cmnd=POWER%20TOGGLE"); //dining
 				//http_cmnd("http://192.168.1.61/cm?cmnd=POWER%20TOGGLE"); //den
 				http_cmnd("http://192.168.1.66/cm?cmnd=POWER%20TOGGLE"); //lamp
 				break;
 			case 6902450: //right button
+				last_good_value = value;
 				group_power_flag = 1;
 				group_power_states[group_power_flag] = !group_power_states[group_power_flag];
 				break;
 			case 15723561: //front door - Sonoff DW1
-				pd_trigger = DOOR;
+				last_good_value = value;
+				pd_trigger = PD_Triggers::DOOR;
+				DEBUG_CONSOLE.print("DOOR: ");
+				DEBUG_CONSOLE.println(value);
 				break;
 			case 0:
 				break;
@@ -333,23 +339,121 @@ void handle_RF_command() {
 	}
 }
 
+
 void handle_presence_detection() {
-	if (pd_trigger != NONE) {
-		pd_trigger = NONE;
-		// if there is a pd_trigger check for presence of phone by pinging it.
-		phone_state = Ping.ping(phone_ip, 1) ? HERE : AWAY;
-		if (phone_state != HERE) {
-			// try again when ping fails with more pings to be more certain phone is not here
-			// because it's annoying for the lights to turn out when you are home because of a missed ping
-			phone_state = Ping.ping(phone_ip, 5) ? HERE : AWAY; // 5 pings
+	// We check for a phone by pinging its IP address at regular intervals (TIMER trigger).
+	// If the phone is HERE we assume its owner is here.
+	// We do not ping for the phone right when the door is opened because pinging can be slow and the phone may not be connected to WiFi yet.
+	// Since we cannot rely on pinging to always give an immediate, correct phone state, we have to work with stale data, which makes the code tricky.
+
+	//enum class PhoneStates {HERE, AWAY};
+	static enum PhoneStates previous_phone_state = PhoneStates::AWAY;
+	static enum PhoneStates phone_state = PhoneStates::AWAY;
+
+	static bool door_opened_while_away = false;
+	static bool enable_welcome_light = false;
+
+	static uint32_t t1_interval = 0; // default to zero so check for phone happens on first call
+	static uint32_t t1_pm = millis(); // timer 1 previous millis
+	//static uint32_t t2_pm = millis();
+	static uint32_t door_opened_pm = 0;
+	static bool enable_away_power_off = false;
+	uint32_t dt = 0;
+
+	dt = millis() - t1_pm; // even when millis() overflows this still gives the correct time elapsed
+	if (pd_trigger == PD_Triggers::NONE && dt >= t1_interval) {
+		// normally we check every PD_Phone_Check_Interval but if the DOOR is opened we override the normal check cycle
+		t1_pm = millis();
+		t1_interval = PD_Phone_Check_Interval;
+		pd_trigger = PD_Triggers::TIMER;
+	}
+
+	dt = millis() - door_opened_pm;
+	if (enable_away_power_off && dt >= PD_On_Away_Power_Off_Delay) {
+		enable_away_power_off = false;
+		door_opened_pm = 0;
+		//http_cmnd("http://192.168.1.50/cm?cmnd=POWER%20OFF"); //kitchen. for testing.
+
+		phone_state = check_for_phone();
+		if (phone_state == PhoneStates::AWAY) {
+			char buf[] = "Group0 OFF"; //everything off
+			process_cmnd(buf);
+			DEBUG_PRINTLN("pd: away power off");
+			write_log("pd: away power off");
+		}
+	}
+
+	if (pd_trigger == PD_Triggers::TIMER) {
+		previous_phone_state = phone_state;
+		phone_state = check_for_phone();
+		if (phone_state == PhoneStates::AWAY) {
+			enable_welcome_light = true;
+
+			// phone was here but now away so turn everything off.
+			// checking previous state ensures everything is only turned off once.
+			if (previous_phone_state == PhoneStates::HERE) {
+				// it is possible to miss a door open trigger
+				// if that happens set door_opened_pm to current millis()
+				if (door_opened_pm == 0) {
+					door_opened_pm = millis();
+				}
+				enable_away_power_off = true;
+				DEBUG_PRINTLN("pd: away");
+				write_log("pd: away");
+			}
+
+			if (door_opened_while_away) {
+				door_opened_while_away = false; // clear flag, so multiple entries can be logged while away.
+				DEBUG_PRINTLN("pd: DOOR OPENED WHILE AWAY");
+				write_log("pd: DOOR OPENED WHILE AWAY");				
+			}
+		}
+		else if (phone_state == PhoneStates::HERE) {
+			door_opened_while_away = false;
+			if (previous_phone_state == PhoneStates::AWAY) {
+				// cannot do much here because we cannot be certain if phone was detected as HERE before entering (triggering DOOR)
+				DEBUG_PRINTLN("pd: here");
+				write_log("pd: here");
+			}
+			else {
+				enable_welcome_light = false;
+				enable_away_power_off = false;
+			}
+		}
+	}
+	else if (pd_trigger == PD_Triggers::DOOR) {
+		door_opened_pm = millis();
+
+		// door was opened so check for phone using a TIMER trigger after PD_WiFi_Connect_Delay.
+		// the delay gives time for phone to connect/drop WiFi (arriving/leaving).
+		// if the delay is not long enough false DOOR OPENED WHILE AWAY messages will be logged
+		t1_pm = millis();
+		t1_interval = PD_WiFi_Connect_Delay;
+
+		// cannot use (phone_state == PhoneStates::AWAY) reliably to detect entering because the phone may have been detected before entering
+		if (enable_welcome_light) {
+			enable_welcome_light = false;
+			http_cmnd("http://192.168.1.50/cm?cmnd=POWER%20ON"); //kitchen
+			http_cmnd("http://192.168.1.66/cm?cmnd=POWER%20ON"); //lamp
+
+			//process_cmnd("POWERCLOCK ON"); //compiles but does not execute. process_cmnd manipulates buf in place so it cannot be used on a constant string
+			char buf[] = "POWERCLOCK ON";
+			process_cmnd(buf);
 		}
 
-		hello_goodbye();
+		if (phone_state == PhoneStates::AWAY) {
+			// this will only log a warning message if phone is not detected as HERE the next time it is pinged
+			door_opened_while_away = true;
+		}
 
-		t1_cntdwn = NUM_T1_INTERVALS;
-		timer1_write(ticks);
+		DEBUG_PRINTLN("pd: door opened");
+		write_log("pd: door opened");
+		//http_cmnd("http://192.168.1.50/cm?cmnd=POWER%20TOGGLE"); //for testing
 	}
+
+	pd_trigger = PD_Triggers::NONE;
 }
+
 
 void handle_smart_speaker_command() {
 	switch (sc) {
@@ -375,6 +479,7 @@ void handle_smart_speaker_command() {
 	}
 	sc = DO_NOTHING;
 }
+
 
 void handle_group_power_command() {
 	//digitalWrite(LED, digitalRead(LED) == HIGH ? LOW : HIGH);
@@ -440,7 +545,10 @@ void handle_group_power_command() {
 							s.replace(start, 3, " ");
 						}
 						DEBUG_CONSOLE.println(s.c_str());
-						process_cmnd(&s[0]);
+
+						char buf[s.length()+1] = "";
+						strcpy(buf, s.c_str());
+						process_cmnd(buf);
 					}
 					else {
 						DEBUG_CONSOLE.println("invalid command");
@@ -452,6 +560,53 @@ void handle_group_power_command() {
 	}
 }
 
+
+void write_log(String data) {
+	File f = LittleFS.open("/access_logC.txt", "r");
+	if (f) {
+		size_t fsize = f.size();
+		f.close();
+		// if full (about 100 lines) rotate log files
+		if (fsize > 3500) {
+		//if (fsize > 1000) {
+			LittleFS.remove("/access_logP.txt");
+			LittleFS.rename("/access_logC.txt", "/access_logP.txt");
+		}
+	}
+	
+
+	f = LittleFS.open("/access_logC.txt", "a");
+	if (f) {
+		time_t epochTime = timeClient.getEpochTime();
+		struct tm *ptm = gmtime(&epochTime);
+		char ts[23];
+		snprintf(ts, sizeof ts, "%d/%02d/%02d %02d:%02d:%02d - ", ptm->tm_year+1900, ptm->tm_mon+1, ptm->tm_mday, ptm->tm_hour, ptm->tm_min, ptm->tm_sec);
+		
+		//write_log crashes if it gets interrupted here. not sure why.
+		noInterrupts();
+		f.print(ts);
+
+		f.print(data);
+		f.print("\n");
+		delay(1); //works without this. need it?? makes sure access time is changed??
+		f.close();
+		interrupts();
+	}
+}
+
+
+enum PhoneStates check_for_phone() {
+	enum PhoneStates phone_state = PhoneStates::AWAY;
+	phone_state = Ping.ping(phone_ip, 1) ? PhoneStates::HERE : PhoneStates::AWAY;
+	if (phone_state == PhoneStates::AWAY) {
+		// try again when ping fails with more pings to be more certain phone is not here
+		// because it's annoying for the lights to turn out when you are home because of a missed ping
+		phone_state = Ping.ping(phone_ip, 5) ? PhoneStates::HERE : PhoneStates::AWAY; // 5 pings
+	}
+	return phone_state;
+}
+
+
 void transmit_IR_data() {
 	if (ir_data != "") {
 		uint32_t ulircode = strtoul(ir_data.c_str(), NULL, 16);
@@ -460,6 +615,7 @@ void transmit_IR_data() {
 	}
 }
 
+
 void http_cmnd(String URL) {
 	if (WiFi.status() == WL_CONNECTED) {
 		ahClient.init("GET", URL);
@@ -467,51 +623,6 @@ void http_cmnd(String URL) {
 	}
 }
 
-/*
-void hello_goodbye() {
-	static enum PhoneStates prev_state = INDETERMINATE;
-	if (phone_state == HERE && prev_state != phone_state) {
-		prev_state = phone_state;
-		DEBUG_PRINTLN("hello");
-		http_cmnd("http://192.168.1.50/cm?cmnd=POWER%20ON"); //kitchen
-
-	}
-	else if (phone_state == AWAY && prev_state != phone_state) {
-		prev_state = phone_state;
-		DEBUG_PRINTLN("goodbye");
-		//http_cmnd("http://192.168.1.50/cm?cmnd=POWER%20OFF"); //kitchen. for testing.
-		http_cmnd("http://192.168.1.60/cm?cmnd=Group0%20OFF"); //everything off
-	}
-	else {
-		DEBUG_PRINTLN("no change");
-	}
-}
-*/
-
-void hello_goodbye() {
-	static enum PhoneStates prev_state = INDETERMINATE;
-	if (phone_state == HERE) {
-		if (phone_state != prev_state) {
-			prev_state = phone_state;
-			DEBUG_PRINTLN("pd: hello");
-			http_cmnd("http://192.168.1.50/cm?cmnd=POWER%20ON"); //kitchen
-		}
-		else {
-			DEBUG_PRINTLN("pd: still here");
-		}
-	}
-	else if (phone_state == AWAY) {
-		if (phone_state != prev_state) {
-			prev_state = phone_state;
-			DEBUG_PRINTLN("pd: goodbye");
-			//http_cmnd("http://192.168.1.50/cm?cmnd=POWER%20OFF"); //kitchen. for testing.
-			process_cmnd("Group0 OFF"); //everything off
-		}
-		else {
-			DEBUG_PRINTLN("pd: still away");
-		}
-	}
-}
 
 size_t simple_JSON_parse(string s, string key, size_t start_pos, vector<string> &output) {
 	size_t end_pos = string::npos;
@@ -543,27 +654,39 @@ size_t simple_JSON_parse(string s, string key, size_t start_pos, vector<string> 
 	return end_pos;
 }
 
-void update_time() {
+
+bool update_time(int8_t num_attempts) {
+	bool retval = false;
 	uint8_t s = 0;
 
-	if (timeClient.update()) {
-		DEBUG_PRINT("ut: ");
-		DEBUG_PRINTLN(timeClient.getFormattedTime());
-		time_update_needed = false;
-		s = timeClient.getSeconds();
-		h = timeClient.getHours();
-		m = timeClient.getMinutes();
-		tic = TICS_PER_SEC * s;
+	num_attempts--;
+	if (num_attempts >= 0) {
+		retval = timeClient.update();
+		if (retval) {
+			DEBUG_PRINT("ut: ");
+			DEBUG_PRINTLN(timeClient.getFormattedTime());
+			time_update_needed = false;
+			s = timeClient.getSeconds();
+			h = timeClient.getHours();
+			m = timeClient.getMinutes();
+			tic = TICS_PER_SEC * s;
+		}
+		else {
+			retval = update_time(num_attempts);
+		}
 	}
 
 	if (h > 23 || m > 59 || s > 59) {
 		delay(2000);
 		ESP.restart();
 	}
+
+	return retval;
 }
 
+
 void set_sleep_time() {
-	update_time();
+	update_time(2);
 	tic = 0;
 	uint32_t seconds_since_midnight = 3600*timeClient.getHours() + 60*timeClient.getMinutes() + timeClient.getSeconds();
 	uint8_t day_of_the_week = timeClient.getDay();
@@ -602,6 +725,7 @@ void set_sleep_time() {
 	}
 }
 
+
 void show_leds() {
 		//FastLED.show() produces glitchy results so use NeoPixel Show() instead
 		RgbColor pixel;
@@ -611,6 +735,7 @@ void show_leds() {
 		}
 		strip.Show();
 }
+
 
 void handle_flash_bin(AsyncWebServerRequest *request, const String &filename, size_t index, uint8_t *data, size_t len, bool final) {
 	//ESP.wdtDisable();
@@ -665,7 +790,9 @@ void handle_flash_bin(AsyncWebServerRequest *request, const String &filename, si
 	}
 }
 
-string process_cmnd(char *buf) {
+
+string process_cmnd(char buf[]) {
+
 	//DEBUG_PRINTLN("process_cmnd");
 	char empty[1] = "";
 	char *cmnd = NULL;
@@ -781,22 +908,65 @@ string process_cmnd(char *buf) {
 	return message;
 }
 
+
+void OTA_server_initiate() {
+	ArduinoOTA.onStart([]() {
+		String type;
+		if (ArduinoOTA.getCommand() == U_FLASH) {
+			type = "sketch";
+		} else { // U_FS
+			type = "filesystem";
+		}
+
+		// NOTE: if updating FS this would be the place to unmount FS using FS.end()
+		Serial.println("Start updating " + type);
+	});
+	ArduinoOTA.onEnd([]() {
+		Serial.println("\nEnd");
+	});
+	ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+		Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+	});
+	
+	ArduinoOTA.onError([](ota_error_t error) {
+		Serial.printf("Error[%u]: ", error);
+		if (error == OTA_AUTH_ERROR) {
+			Serial.println("Auth Failed");
+		} else if (error == OTA_BEGIN_ERROR) {
+			Serial.println("Begin Failed");
+		} else if (error == OTA_CONNECT_ERROR) {
+			Serial.println("Connect Failed");
+		} else if (error == OTA_RECEIVE_ERROR) {
+			Serial.println("Receive Failed");
+		} else if (error == OTA_END_ERROR) {
+			Serial.println("End Failed");
+		}
+	});
+	ArduinoOTA.begin();
+}
+
+
+void smart_devices_config_load() {
+	File f = LittleFS.open("/smart_devices.json", "r");
+	if (f) {
+		smart_devices_JSON_string = f.readString().c_str();
+		f.close();
+	}
+	else {
+		Serial.println("Failed to open config file");
+	}
+}
+
+
 void web_server_initiate() {
-	web_server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
-		//request->send_P(200, "text/html", index_html);
-		request->send(LittleFS, "/index.html");
-	});
-
-	web_server.on("/TV", HTTP_GET, [](AsyncWebServerRequest *request) {
-		request->send(LittleFS, "/TV.html");
-	});
-
 	web_server.on("/cm", HTTP_GET, [](AsyncWebServerRequest *request) {
-		char buf[301]; // max buf size on TASMOTA
 		string message;
 		if (request->hasParam(PARAM_INPUT_1)) {
 			String inputMessage = request->getParam(PARAM_INPUT_1)->value();
-			inputMessage.toCharArray(buf, 301);
+			unsigned int len = inputMessage.length();
+			len = (len < MAX_PARAMETER_SIZE) ? len : MAX_PARAMETER_SIZE;
+			char buf[len+1];
+			inputMessage.toCharArray(buf, len+1); // toCharArray copies inputMessage then adds \0 or the first MAX_PARAMETER_SIZE chars from inputMessage then adds \0
 			message = process_cmnd(buf);
 		}
 		else {
@@ -808,24 +978,64 @@ void web_server_initiate() {
 		request->send(response);
 	});
 
+
+	web_server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+		//request->send_P(200, "text/html", index_html);
+		request->send(LittleFS, "/index.html");
+	});
+
 	web_server.on("/smart_devices.json", HTTP_GET, [](AsyncWebServerRequest *request) {
+		//AsyncWebServerResponse *response = request->beginResponse(200, "application/json", smart_devices_JSON_string.c_str());
 		AsyncWebServerResponse *response = request->beginResponse(200, "application/json", smart_devices_JSON_string.c_str());
 		response->addHeader("Access-Control-Allow-Origin", CORS_value.c_str());
 		request->send(response);
 	});
 
-	web_server.on("/restart", HTTP_GET, [](AsyncWebServerRequest *request) {
-		request->send(LittleFS, "/restart.html");
-		restart_needed = true;
+	web_server.on("/TV", HTTP_GET, [](AsyncWebServerRequest *request) {
+		request->send(LittleFS, "/TV.html");
 	});
 
 	web_server.on("/console", HTTP_GET, [](AsyncWebServerRequest *request) {
 		request->send(LittleFS, "/console.html");
 	});
 
+	web_server.on("/access_log", HTTP_GET, [](AsyncWebServerRequest *request) {
+		request->send(LittleFS, "/access_log.html");
+	});
+
+	web_server.on("/access_logP.txt", HTTP_GET, [](AsyncWebServerRequest *request) {
+		//access_logP.txt might not exist yet, so prepare a blank string to return
+		String content = "";
+		File f = LittleFS.open("/access_logP.txt", "r");
+		if (f) {
+			content = f.readString().c_str();
+			f.close();
+		}
+		AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", content);
+		response->addHeader("Access-Control-Allow-Origin", CORS_value.c_str());
+		request->send(response);
+	});
+
+	web_server.on("/access_logC.txt", HTTP_GET, [](AsyncWebServerRequest *request) {
+		String content = "";
+		File f = LittleFS.open("/access_logC.txt", "r");
+		if (f) {
+			content = f.readString().c_str();
+			f.close();
+		}
+		AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", content);
+		response->addHeader("Access-Control-Allow-Origin", CORS_value.c_str());
+		request->send(response);
+	});
+
 	//OTA update through web interface
 	web_server.on("/select_bin", HTTP_GET, [](AsyncWebServerRequest *request) {
 		request->send(LittleFS, "/select_bin.html");
+	});
+
+	web_server.on("/restart", HTTP_GET, [](AsyncWebServerRequest *request) {
+		request->send(LittleFS, "/restart.html");
+		restart_needed = true;
 	});
 
 	//OTA update via web page
@@ -851,22 +1061,35 @@ void web_server_initiate() {
 	web_server.begin();
 }
 
-void smart_devices_config_load() {
-	if (LittleFS.begin()) {
-		File f = LittleFS.open("/smart_devices.json", "r");
-		if (f) {
-			smart_devices_JSON_string = f.readString().c_str();
-			f.close();
-		}
-		else {
-			Serial.println("Failed to open config file");
-		}
-	}
-	else {
-		Serial.println("Failed to mount file system");
-		return;
-	}
+
+void webserial_initiate() {
+	websocket = new AsyncWebSocket("/consolews");
+    websocket->onEvent([&](AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len) -> void {
+		if (type == WS_EVT_DATA) {
+			len = (len < MAX_PARAMETER_SIZE) ? len : MAX_PARAMETER_SIZE;
+			char buf[len+1];
+			uint8_t i = 0;
+			for(i = 0; i < len; i++){
+				buf[i] = char(data[i]);
+			}
+			buf[i] = '\0';
+
+			//write_log(buf);
+			//can get sent #c or #c @P (not sure what @P means or why it is sent)
+			if (strncmp(buf, "#c", 2) != 0) {
+				process_cmnd(buf);
+			}
+			else {
+				//received #c (call) reply with #r (response)
+				WebSerial.print("#r");
+			}
+        }
+	});
+
+	web_server.addHandler(websocket);
+	WebSerial._ws = websocket;
 }
+
 
 //using an older version of Fauxmo library because I want smart sockets not smart bulbs. Using fauxmo smart sockets lets me tell Alexa to turn off all the lights without affecting fauxmo devices.
 void fauxmo_initiate() {
@@ -932,41 +1155,6 @@ void fauxmo_initiate() {
 	});
 }
 
-void OTA_server_initiate() {
-	ArduinoOTA.onStart([]() {
-		String type;
-		if (ArduinoOTA.getCommand() == U_FLASH) {
-			type = "sketch";
-		} else { // U_FS
-			type = "filesystem";
-		}
-
-		// NOTE: if updating FS this would be the place to unmount FS using FS.end()
-		Serial.println("Start updating " + type);
-	});
-	ArduinoOTA.onEnd([]() {
-		Serial.println("\nEnd");
-	});
-	ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-		Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
-	});
-	
-	ArduinoOTA.onError([](ota_error_t error) {
-		Serial.printf("Error[%u]: ", error);
-		if (error == OTA_AUTH_ERROR) {
-			Serial.println("Auth Failed");
-		} else if (error == OTA_BEGIN_ERROR) {
-			Serial.println("Begin Failed");
-		} else if (error == OTA_CONNECT_ERROR) {
-			Serial.println("Connect Failed");
-		} else if (error == OTA_RECEIVE_ERROR) {
-			Serial.println("Receive Failed");
-		} else if (error == OTA_END_ERROR) {
-			Serial.println("End Failed");
-		}
-	});
-	ArduinoOTA.begin();
-}
 
 void clock_initiate() {
 	// instead of using FastLED to manage the POWER used we calculate the max brightness one time below
@@ -990,9 +1178,10 @@ void clock_initiate() {
 	strip.Show(); // Set to black (^= off) after reset
 
 	timeClient.begin();
-	update_time();
+	update_time(2);
 	//Serial.println(timeClient.getFormattedTime());
 }
+
 
 void setup() {
 	pinMode(LED, OUTPUT);
@@ -1000,33 +1189,21 @@ void setup() {
 
 	Serial.begin(57600);
 
-	smart_devices_config_load();
-
-	rf_switch.enableReceive(digitalPinToInterrupt(12)); //D6 on HiLetgo ESP8266
-	irsend.begin();
-
-	websocket = new AsyncWebSocket("/consolews");
-    websocket->onEvent([&](AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len) -> void {
-		if(type == WS_EVT_DATA){
-			char buf[len];
-			for(uint8_t i=0; i < len; i++){
-				buf[i] = char(data[i]);
-			}
-			if (strcmp(buf, "#c") != 0) {
-				process_cmnd(buf);
-			}
-			else {
-				DEBUG_CONSOLE.print("#r");
-			}
-        }
-	});
-
-	web_server.addHandler(websocket);
-	WebSerial._ws = websocket;
-
-	web_server_initiate();
 	OTA_server_initiate();
 
+	if (!WiFi.config(LOCAL_IP, GATEWAY, SUBNET_MASK, DNS1, DNS2)) {
+		Serial.println("WiFi config failed.");
+	}
+
+	if (WiFi.SSID() != ssid) {
+		WiFi.mode(WIFI_STA);
+		WiFi.begin(ssid, password);
+		WiFi.persistent(true);
+		WiFi.setAutoConnect(true);
+		WiFi.setAutoReconnect(true);
+	}
+
+/*
 	WiFi.begin(ssid, password);
 	Serial.println("");
 	Serial.print("WiFi connecting");
@@ -1037,20 +1214,62 @@ void setup() {
 	Serial.println("");
 	Serial.print("Connected: ");
 	Serial.println(WiFi.localIP());
+*/
 
+	if (WiFi.waitForConnectResult() != WL_CONNECTED) {
+		Serial.println(F("Connection Failed!"));
+
+		WiFi.begin(ssid, password);
+		Serial.println(F(""));
+		Serial.print(F("WiFi connecting"));
+		while (WiFi.status() != WL_CONNECTED) {
+			delay(500);
+			Serial.print(F("."));
+		}
+		Serial.println(F(""));
+		Serial.print(F("Connected: "));
+		Serial.println(WiFi.localIP());
+	}
+
+	if (!LittleFS.begin()) {
+		Serial.println("Failed to mount file system");
+		// something is very broken. don't continue, but still allow OTA updates.
+		while(true) {
+			ArduinoOTA.handle();
+		}
+	}
+
+	smart_devices_config_load();
+	web_server_initiate();
+	webserial_initiate();
+
+	rf_switch.enableReceive(digitalPinToInterrupt(12)); //D6 on HiLetgo ESLittleFS.remove("/access_logP.txt");P8266
+	irsend.begin();
 	fauxmo_initiate();
-
 	clock_initiate();
 
-	//setup presence detection timer
-	t1_cntdwn = 1; // at power on have timer1 pd_trigger check for phone after 1 interval of ticks
-	timer1_attachInterrupt(timer1_ISR);
-	timer1_enable(TIM_DIV256, TIM_EDGE, TIM_SINGLE);
-	timer1_write(ticks);
+	// a WebSerial message sent here likely won't make it to the console because the client won't have established a connection yet
+	DEBUG_CONSOLE.println("SmartHomeControl - Power On");
+	write_log("SHC on");
+
+/*
+	Dir dir = LittleFS.openDir("/");
+	while (dir.next()) {
+		DEBUG_CONSOLE.println(dir.fileName());
+		write_log(dir.fileName());
+		if(dir.fileSize()) {
+			File f = dir.openFile("r");
+			DEBUG_CONSOLE.println(f.size());
+			size_t s = f.size();
+			char str[6];
+			snprintf(str, sizeof str, "%zu", s);
+			write_log(str);
+		}
+	}
+*/
 
 	//ESP.wdtEnable(4000); //[ms], parameter is required but ignored
 }
-
 
 
 void loop() {
@@ -1058,7 +1277,9 @@ void loop() {
 	ArduinoOTA.handle();
 
 	if (restart_needed || WiFi.status() != WL_CONNECTED) {
-		restart_needed = false;
+		web_server.removeHandler(websocket); // prevents reconnection before restart?
+		websocket->closeAll();
+		// need a delay here for OTA update to finish and for websocket to completely close
 		delay(2000);
 		ESP.restart();
 	}
