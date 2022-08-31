@@ -435,6 +435,8 @@ void handle_presence_detection() {
 			enable_welcome_light = false;
 			http_cmnd("http://192.168.1.50/cm?cmnd=POWER%20ON"); //kitchen
 			http_cmnd("http://192.168.1.66/cm?cmnd=POWER%20ON"); //lamp
+			http_cmnd("http://192.168.1.64/cm?cmnd=POWER%20ON"); //raspberry pi outlet
+
 
 			//process_cmnd("POWERCLOCK ON"); //compiles but does not execute. process_cmnd manipulates buf in place so it cannot be used on a constant string
 			char buf[] = "POWERCLOCK ON";
