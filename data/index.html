@@ -460,7 +460,7 @@ function update_group_switches() {
 		if (group_switch.getAttribute("data-ignore-change") == "false") {
 			var group = group_switch.getAttribute("id").split("smart_checkbox_")[1];
 			// if any of the smart checkboxes in the group are checked the checkbox for that group becomes checked
-			group_switch.checked = Array.from(document.querySelectorAll('input[data-'+group+']')).some(function(sc){return sc.checked});
+			group_switch.checked = Array.from(document.querySelectorAll('input[data-'+group+']')).some(function(sc){return (sc.checked && sc.getAttribute("data-"+group).toUpperCase().startsWith("ON")) });
 		}
 	});
 }
