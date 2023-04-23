@@ -151,8 +151,9 @@ enum class PD_Triggers {NONE = 0, TIMER = 1, DOOR = 2};
 enum PD_Triggers pd_trigger = PD_Triggers::NONE;
 
 fauxmoESP fauxmo;
-enum SmartCommand {DO_NOTHING, TV_ON, TV_OFF, PLAYPAUSE, CLOCK_ON, CLOCK_OFF};
-SmartCommand sc = DO_NOTHING;
+enum SmartCommand {SC_DO_NOTHING, SC_TV_ON, SC_TV_OFF, SC_PLAYPAUSE, SC_CLOCK_ON, SC_CLOCK_OFF};
+SmartCommand sc = SC_DO_NOTHING;
+bool flag_get_tv_state = true;
 bool tv_state = false;
 bool pause_state = false;
 
@@ -464,27 +465,27 @@ void handle_presence_detection() {
 
 void handle_smart_speaker_command() {
 	switch (sc) {
-	case TV_ON:
+	case SC_TV_ON:
 		ir_data = "8A"; // discrete TV Power ON
 		break;
-	case TV_OFF:
+	case SC_TV_OFF:
 		ir_data = "18"; // discrete TV Power OFF
 		break;
-	case PLAYPAUSE:
+	case SC_PLAYPAUSE:
 		ir_data = "32"; // TV Play/Pause
 		break;
-	case CLOCK_ON:
+	case SC_CLOCK_ON:
 		clock_running = true;
 		time_update_needed = true;
 		break;
-	case CLOCK_OFF:
+	case SC_CLOCK_OFF:
 		clock_running = false;
 		set_sleep_time();
 		break;
 	default:
 		break;
 	}
-	sc = DO_NOTHING;
+	sc = SC_DO_NOTHING;
 }
 
 
@@ -824,7 +825,7 @@ void handle_flash_bin(AsyncWebServerRequest *request, const String &filename, si
 	if (!index)	{
 		size_t filesize = 0;
 
-        // contentLength() includes the count of bytes in bin file plus the bytes in the header and footer.
+		// contentLength() includes the count of bytes in bin file plus the bytes in the header and footer.
 		// these extra bytes will cause the writing of a filesystem to fail
 		// so use a separate form input on the upload page to send the actual filesize alongside the bin file
 		if (request->hasParam("filesize", true)) {
@@ -892,14 +893,14 @@ string process_cmnd(char buf[]) {
 		value = empty;
 	}
 
-    up = cmnd;
+	up = cmnd;
 	while (*up) {
 		*up = toupper(*up);
 		up++;
 	}
 
 	if (strcmp(cmnd, "CORS") != 0) {
-	    up = value;
+		up = value;
 		while (*up) {
 			*up = toupper(*up);
 			up++;
@@ -1146,7 +1147,7 @@ void web_server_initiate() {
 
 void webserial_initiate() {
 	websocket = new AsyncWebSocket("/consolews");
-    websocket->onEvent([&](AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len) -> void {
+	websocket->onEvent([&](AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len) -> void {
 		if (type == WS_EVT_DATA) {
 			len = (len < MAX_PARAMETER_SIZE) ? len : MAX_PARAMETER_SIZE;
 			char buf[len+1];
@@ -1165,7 +1166,7 @@ void webserial_initiate() {
 				//received #c (call) reply with #r (response)
 				WebSerial.print("#r");
 			}
-        }
+		}
 	});
 
 	web_server.addHandler(websocket);
@@ -1182,9 +1183,9 @@ void fauxmo_initiate() {
 
 	// Add virtual devices
 	fauxmo.addDevice("TV");
-	//fauxmo.addDevice("Pause"); // not understood well
-	//fauxmo.addDevice("Show"); // not understood well
-	//fauxmo.addDevice("Hold"); // not understood well
+	//fauxmo.addDevice("Pause"); // not understood well by Alexa
+	//fauxmo.addDevice("Show"); // not understood well by Alexa
+	//fauxmo.addDevice("Hold"); // not understood well by Alexa
 	fauxmo.addDevice("Idle");
 	fauxmo.addDevice("Clock");
 
@@ -1194,29 +1195,29 @@ void fauxmo_initiate() {
 		if (0 == device_id) {
 			tv_state = state;
 			if (state) {
-				sc = TV_ON;
+				sc = SC_TV_ON;
 			}
 			else {
-				sc = TV_OFF;
+				sc = SC_TV_OFF;
 			}
 		}
 		else if (1 == device_id) {
 			pause_state = state;
-			sc = PLAYPAUSE;
+			sc = SC_PLAYPAUSE;
 		}
 		else if (2 == device_id) {
 			clock_running = state;
 			if (state) {
-				sc = CLOCK_ON;
+				sc = SC_CLOCK_ON;
 			}
 			else {
-				sc = CLOCK_OFF;
+				sc = SC_CLOCK_OFF;
 			}
 		}
 		else {
-			sc = DO_NOTHING;
+			sc = SC_DO_NOTHING;
 		}
-    });
+	});
 
 	// Callback to retrieve current state (for GetBinaryState queries)
 	fauxmo.onGetState([](unsigned char device_id, const char * device_name) {
@@ -1231,7 +1232,7 @@ void fauxmo_initiate() {
 			state = clock_running;
 		}
 		else {
-			sc = DO_NOTHING;
+			sc = SC_DO_NOTHING;
 		}
 		return state;
 	});
@@ -1284,19 +1285,6 @@ void setup() {
 		WiFi.setAutoConnect(true);
 		WiFi.setAutoReconnect(true);
 	}
-
-/*
-	WiFi.begin(ssid, password);
-	Serial.println("");
-	Serial.print("WiFi connecting");
-	while (WiFi.status() != WL_CONNECTED) {
-		delay(500);
-		Serial.print(".");
-	}
-	Serial.println("");
-	Serial.print("Connected: ");
-	Serial.println(WiFi.localIP());
-*/
 
 	if (WiFi.waitForConnectResult() != WL_CONNECTED) {
 		Serial.println(F("Connection Failed!"));
