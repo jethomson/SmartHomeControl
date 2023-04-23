@@ -274,7 +274,10 @@
 	  	<div id="insert_groups_before_here" style="display: none"></div>
 	  	<div id="insert_singletons_before_here" style="display: none"></div>
 	  	<div id="tv_button" class="grid-item-button">
-			<a href="/TV" comment="use <a> instead of <form> because want to be able to open remote in a new tab"><button name="">TV Remote</button></a>
+			<a href="/TV" comment="use <a> instead of <form> because want to be able to open remote in a new tab"><button name="" title="Uses IR to control TV">TV Remote</button></a>
+		</div>
+	  	<div id="tv_button" class="grid-item-button">
+			<a href="/TV_ECP" comment="use <a> instead of <form> because want to be able to open remote in a new tab"><button name="" title="Uses Roku's External Control Protocol to control TV">TV Remote (ECP)</button></a>
 		</div>
 	  	<div id="console_button" class="grid-item-button">
 			<a href="/console"><button name="">Console</button></a>
@@ -377,6 +380,39 @@ function process_current(current) {
 }
 
 
+// since the current level for a sleeping TV is very similar to a recently turned off TV, monitoring current was not a great way to determine the TV's power state
+// the TV's power state is now monitored by using the Roku TV's External Control Protocol (ECP) http://192.168.1.65:8060/query/device-info
+// since the ECP server does not return results with a header that allows CORS this webpage can not query the TV directly
+// the smart home controller queries the TV when the command http://192.168.1.60/cm?cmnd=PowerTV is sent
+// the code for monitoring power is being left in in case it is of use to someone else or is needed in the future.
+function tv_power_info(element, responseText) {
+	var presponse = JSON.parse(responseText);
+
+	var inputChecked;
+	var t2 = (((presponse || {}).StatusSNS || {}).ENERGY || {}).Current;
+	var avg = 0;
+
+	// TV off: current is ~0.198 A ???
+	// TV off: current is ~0.188 A ??? //0.189 < presponse.StatusSNS.ENERGY.Current
+	// TV on, no input, screen blanked: ~0.192 A, ~0.201 A current might fluctuate too much to be able to set a cutoff between OFF and NO INPUT blank
+	// TV on, sleep, screen blanked: current is ~0.215 A
+	// TV on, active: current is ~1.688 A
+		
+	if (t2 !== undefined) {
+		avg = process_current(presponse.StatusSNS.ENERGY.Current);
+
+		if (tv_sleep_current_lb < avg) {
+			inputChecked = true;
+		}
+		else if (avg <= tv_sleep_current_lb) {
+			inputChecked = false;
+		}
+	}
+
+	
+	return inputChecked;
+}
+
 function update_smart_checkbox(element, responseText) {
 	if (element.getAttribute("data-ignore-change") == "false") {
 		var presponse = JSON.parse(responseText);
@@ -384,35 +420,28 @@ function update_smart_checkbox(element, responseText) {
 		var inputChecked;
 		var POWERx = element.getAttribute("data-switch-status").split("cm?cmnd=")[1].toUpperCase();
 		var t1 = (presponse || {})[POWERx];
-		var t2 = (((presponse || {}).StatusSNS || {}).ENERGY || {}).Current;
-		var avg = 0;
-
-		// TV off: current is ~0.198 A ???
-		// TV off: current is ~0.188 A ??? //0.189 < presponse.StatusSNS.ENERGY.Current
-		// TV on, no input, screen blanked: ~0.192 A, ~0.201 A current might fluctuate too much to be able to set a cutoff between OFF and NO INPUT blank
-		// TV on, sleep, screen blanked: current is ~0.215 A
-		// TV on, active: current is ~1.688 A
-		
+	
 		
 		if (typeof t1 === "undefined" && element.id != "smart_text_TV" && element.id != "smart_checkbox_TV") {
 			console.log("undefined");
 			console.log(element.id);
 		}
 		
-		if (typeof t2 !== "undefined") {
-			avg = process_current(presponse.StatusSNS.ENERGY.Current);
-		}
 	
-		if ( (t1 && presponse[POWERx].toUpperCase() == "ON") || (typeof t2 !== "undefined" && (tv_sleep_current_lb < avg)) ) {
+		if (t1 && presponse[POWERx].toUpperCase() == "ON") {
+			console.log(element.id);
 			inputChecked = true;
 		}
 		else if ( (t1 && presponse[POWERx].toUpperCase() == "OFF") ) {
+			console.log(element.id);
 			inputChecked = false;
 		}
-		else if ( (typeof t2 !== "undefined" && (avg <= tv_sleep_current_lb)) ) {
-			inputChecked = false;
+
+		if (element.id == "smart_text_TV_current" || element.id == "smart_checkbox_TV_current") {
+			inputChecked = tv_power_info1(element, responseText);
 		}
-		else {
+
+		if (inputChecked === undefined) {
 			console.log("DEBUG: special case - something went wrong?");
 			console.log(element.id);
 			inputChecked = false;
@@ -548,7 +577,8 @@ function create_singleton_switches(responseText) {
 	
 	var devices = JSON.parse(responseText);
 	for (var d in devices) {
-		if (devices.hasOwnProperty(d)) {
+		//if key starts with ! do not create a switch for it
+		if (devices.hasOwnProperty(d) && !d.startsWith("!")) {
 			var label_div = document.createElement("div");
 			var label_span = document.createElement("span");
 			var switch_div = document.createElement("div");
@@ -683,6 +713,13 @@ var group_alias = {"group0": "Main", "group1": "MovieTime"};
 var state_check_floor = 2000;  // milliseconds
 var state_check_ceiling = 3000;  // milliseconds
 
+/*
+Deep sleep from home screen (no display input selected) is 0 A or 0.034 A with no response to query or ping
+Deep sleep from home screen will result in TV being completely turned off automatcally (power button has to be pressed to turn back on)
+
+Sleep when on HDMI 1 (pressing any button will turn screen back on). Wil stay in light sleep for a long time (indefinitely?)
+0.216 A == query response of PowerOn
+*/
 var tv_sleep_current_lb = 0.193;
 var tv_sleep_current_ub = 0.225;
 
