@@ -11,7 +11,6 @@
 
 class AsyncHttpClient
 {
-
     struct ConnectArgs {
         String _type;
         String _fullUrl;
@@ -20,18 +19,23 @@ class AsyncHttpClient
         String _absolutePath;
         String _dataMode;
         String _data;
+        AcDataHandler _handle_data;
+        AcConnectHandler _handle_disconnect;
+        void (*_handle_offline)(void);
     };
     
     ConnectArgs *connect_args = NULL;
     //AsyncClient *aClient = NULL;
 
 public:
-    void init(String type, String fullUrl, String dataMode, String data);
+    void init(String type, String fullUrl, String dataMode, String data, AcDataHandler handle_data, void (*handle_offline)(void));
+    void init(String type, String fullUrl, AcDataHandler handle_data, void (*handle_offline)(void));
     void init(String type, String fullUrl);
     void setType(String type);
     void setFullURL(String fullUrl);
     void setDataMode(String dataMode);
     void setData(String data);
+    static void default_handle_data(void *arg, AsyncClient *c, void *data, size_t len);
     void send();
     
 private:
