@@ -99,49 +99,51 @@
 
 <div class="grid-container">
   <div class="grid-item">&nbsp;</div>
-  <div class="grid-item" data-cmnd-URL="http://192.168.1.60/cm?cmnd=" onclick="make_request(this, 'IR E8')" id="toggle"><i class="material-icons">power_settings_new</i></div>
-  <div class="grid-item" data-cmnd-URL="http://192.168.1.60/cm?cmnd=" onclick="make_request(this, 'IR 18')" id="toggle"><i class="material-icons">tv_off</i></div>
+  <!--toggle power and discrete power off only work when TV is not in deep sleep. after being turned off powermode becomes DisplayOff then after 5 or so minutes the TV goes into deep sleep and the ECP server no longer responds to commands-->
+  <div class="grid-item" data-cmnd-URL="http://192.168.1.65:8060/keypress/" onclick="make_request(this, 'Power')" id="toggle" data-note="toggle power"><i class="material-icons" title="This only works if the TV is on or not completely powered down.">power_settings_new</i></div>
+  <div class="grid-item" data-cmnd-URL="http://192.168.1.65:8060/keypress/" onclick="make_request(this, 'PowerOff')" id="toggle" data-note="discrete power off"><i class="material-icons">tv_off</i></div>
 
-  <div class="grid-item" data-cmnd-URL="http://192.168.1.60/cm?cmnd=" onclick="make_request(this, 'IR 66')" id="back"><i class="material-icons flip">exit_to_app</i></div>
+
+  <div class="grid-item" data-cmnd-URL="http://192.168.1.65:8060/keypress/" onclick="make_request(this, 'Back')" id="back"><i class="material-icons flip">exit_to_app</i></div>
   <div class="grid-item">&nbsp;</div>
-  <div class="grid-item" data-cmnd-URL="http://192.168.1.60/cm?cmnd=" onclick="make_request(this, 'IR C0')" id="home"><i class="material-icons">home</i></div>
+  <div class="grid-item" data-cmnd-URL="http://192.168.1.65:8060/keypress/" onclick="make_request(this, 'Home')" id="home"><i class="material-icons">home</i></div>
 
   <div class="grid-item">&nbsp;</div>
-  <div class="grid-item" data-cmnd-URL="http://192.168.1.60/cm?cmnd=" onclick="make_request(this, 'IR 98')" id="up"><i class="material-icons">north</i></div>
+  <div class="grid-item" data-cmnd-URL="http://192.168.1.65:8060/keypress/" onclick="make_request(this, 'Up')" id="up"><i class="material-icons">north</i></div>
   <div class="grid-item">&nbsp;</div>
 
-  <div class="grid-item" data-cmnd-URL="http://192.168.1.60/cm?cmnd=" onclick="make_request(this, 'IR 78')" id="left" style="text-align: right !important"><i class="material-icons">west</i></div>
-  <div class="grid-item" data-cmnd-URL="http://192.168.1.60/cm?cmnd=" onclick="make_request(this, 'IR 54')" id="ok" style="padding-top: 0.8em !important; padding-bottom: 0.9em !important">OK</div>
-  <div class="grid-item" data-cmnd-URL="http://192.168.1.60/cm?cmnd=" onclick="make_request(this, 'IR B4')" id="right" style="text-align: left !important"><i class="material-icons">east</i></div>
+  <div class="grid-item" data-cmnd-URL="http://192.168.1.65:8060/keypress/" onclick="make_request(this, 'Left')" id="left" style="text-align: right !important"><i class="material-icons">west</i></div>
+  <div class="grid-item" data-cmnd-URL="http://192.168.1.65:8060/keypress/" onclick="make_request(this, 'Select')" id="ok" style="padding-top: 0.8em !important; padding-bottom: 0.9em !important">OK</div>
+  <div class="grid-item" data-cmnd-URL="http://192.168.1.65:8060/keypress/" onclick="make_request(this, 'Right')" id="right" style="text-align: left !important"><i class="material-icons">east</i></div>
   
   <div class="grid-item">&nbsp;</div>
-  <div class="grid-item" data-cmnd-URL="http://192.168.1.60/cm?cmnd=" onclick="make_request(this, 'IR CC')" id="down"><i class="material-icons">south</i></div>
+  <div class="grid-item" data-cmnd-URL="http://192.168.1.65:8060/keypress/" onclick="make_request(this, 'Down')" id="down"><i class="material-icons">south</i></div>
   <div class="grid-item">&nbsp;</div>
   
-  <div class="grid-item" data-cmnd-URL="http://192.168.1.60/cm?cmnd=" onclick="make_request(this, 'IR 1E')" id="instantreplay"><i class="material-icons">replay</i></div>
+  <div class="grid-item" data-cmnd-URL="http://192.168.1.65:8060/keypress/" onclick="make_request(this, 'InstantReplay')" id="instantreplay"><i class="material-icons">replay</i></div>
   <div class="grid-item">&nbsp;</div>
-  <div class="grid-item" data-cmnd-URL="http://192.168.1.60/cm?cmnd=" onclick="make_request(this, 'IR 86')" id="menu"><i class="material-icons">menu</i></div>
+  <div class="grid-item" data-cmnd-URL="http://192.168.1.65:8060/keypress/" onclick="make_request(this, 'Info')" id="menu"><i class="material-icons">menu</i></div>
   
-  <div class="grid-item" data-cmnd-URL="http://192.168.1.60/cm?cmnd=" onclick="make_request(this, 'IR 2C')" id="rewind"><i class="material-icons">fast_rewind</i></div> 
-  <!--div class="grid-item" data-cmnd-URL="http://192.168.1.60/cm?cmnd=" onclick="make_request(this, 'IR 32')" id="play" style="letter-spacing: -9px !important"><i class="material-icons" style="letter-spacing: -9px !important">play_arrow</i><i class="material-icons" style="letter-spacing: -9px !important">pause</i></div-->
-  <div class="grid-item" data-cmnd-URL="http://192.168.1.60/cm?cmnd=" onclick="make_request(this, 'IR 32')" id="play"><i class="material-icons" style="letter-spacing: -12px !important">play_arrow</i><i class="material-icons">pause</i></div>
-  <div class="grid-item" data-cmnd-URL="http://192.168.1.60/cm?cmnd=" onclick="make_request(this, 'IR AA')" id="fastforward"><i class="material-icons">fast_forward</i></div>
+  <div class="grid-item" data-cmnd-URL="http://192.168.1.65:8060/keypress/" onclick="make_request(this, 'Rev')" id="rewind"><i class="material-icons">fast_rewind</i></div> 
+  <!--div class="grid-item" data-cmnd-URL="http://192.168.1.65:8060/keypress/" onclick="make_request(this, 'IR 32')" id="play" style="letter-spacing: -9px !important"><i class="material-icons" style="letter-spacing: -9px !important">play_arrow</i><i class="material-icons" style="letter-spacing: -9px !important">pause</i></div-->
+  <div class="grid-item" data-cmnd-URL="http://192.168.1.65:8060/keypress/" onclick="make_request(this, 'Play')" id="play"><i class="material-icons" style="letter-spacing: -12px !important">play_arrow</i><i class="material-icons">pause</i></div>
+  <div class="grid-item" data-cmnd-URL="http://192.168.1.65:8060/keypress/" onclick="make_request(this, 'Fwd')" id="fastforward"><i class="material-icons">fast_forward</i></div>
 
 
   <div class="grid-item">&nbsp;</div>
   <div class="grid-item">&nbsp;</div>
   <div class="grid-item">&nbsp;</div>
 
-  <div class="grid-item" data-cmnd-URL="http://192.168.1.60/cm?cmnd=" onclick="make_request(this, 'IR 08')" id="down"><i class="material-icons">volume_down</i></div>
-  <div class="grid-item" data-cmnd-URL="http://192.168.1.60/cm?cmnd=" onclick="make_request(this, 'IR 04')" id="mute"><i class="material-icons">volume_off</i></div> 
-  <div class="grid-item" data-cmnd-URL="http://192.168.1.60/cm?cmnd=" onclick="make_request(this, 'IR F0')" id="up"><i class="material-icons">volume_up</i></div>
+  <div class="grid-item" data-cmnd-URL="http://192.168.1.65:8060/keypress/" onclick="make_request(this, 'VolumeDown')" id="down"><i class="material-icons">volume_down</i></div>
+  <div class="grid-item" data-cmnd-URL="http://192.168.1.65:8060/keypress/" onclick="make_request(this, 'VolumeMute')" id="mute"><i class="material-icons">volume_off</i></div> 
+  <div class="grid-item" data-cmnd-URL="http://192.168.1.65:8060/keypress/" onclick="make_request(this, 'VolumeUp')" id="up"><i class="material-icons">volume_up</i></div>
 
   <div class="grid-item">&nbsp;</div>
   <div class="grid-item">&nbsp;</div>
   <div class="grid-item">&nbsp;</div>
 
-  <div class="grid-item" data-cmnd-URL="http://192.168.1.60/cm?cmnd=" onclick="make_request(this, 'IR 84')" id="hdmi1"><i class="material-icons" style="letter-spacing: -6px !important">local_fire_department</i><sub>1</sub></div>
-  <div class="grid-item" data-cmnd-URL="http://192.168.1.60/cm?cmnd=" onclick="make_request(this, 'IR 44')" id="hdmi2">
+  <div class="grid-item" data-cmnd-URL="http://192.168.1.65:8060/keypress/" onclick="make_request(this, 'InputHDMI1')" id="hdmi1"><i class="material-icons" style="letter-spacing: -6px !important">local_fire_department</i><sub>1</sub></div>
+  <div class="grid-item" data-cmnd-URL="http://192.168.1.65:8060/keypress/" onclick="make_request(this, 'InputHDMI2')" id="hdmi2">
     <svg xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:svg="http://www.w3.org/2000/svg" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" x="0px" y="0px" viewBox="0 0 684 864" xml:space="preserve">
       <path d="m 158.375,1.65625 c -3.6193,0.1123192 -7.51715,1.4493266 -11.9375,4.9375 C 135.61054,2.4174496 125.11041,0.9665612 115.71875,9.46875 101.22489,7.5879922 96.508461,11.469494 92.9375,16 89.754953,15.934135 69.118652,12.72793 59.65625,26.84375 35.874602,24.030329 28.359472,40.831625 36.875,56.5 c -4.856911,7.518955 -9.889503,14.947226 1.46875,29.28125 -4.018006,7.983514 -1.527431,16.64403 7.9375,27.125 -2.497857,11.2226 2.412077,19.14086 11.21875,25.3125 -1.64709,15.35756 14.083505,24.28743 18.78125,27.46875 1.803677,8.94868 5.56291,17.3927 23.53125,22.0625 2.96323,13.3361 13.76206,15.63906 24.21875,18.4375 -34.561929,20.08954 -64.20067,46.52266 -64,111.375 l -5.0625,9.03125 C 15.337882,350.69604 -20.316547,428.16001 35.4375,491.125 c 3.641871,19.70838 9.749589,33.86396 15.1875,49.53125 8.133834,63.13058 61.21763,92.69161 75.21875,96.1875 20.51653,15.62812 42.36818,30.45672 71.9375,40.84375 27.87515,28.74946 58.07388,39.7064 88.4375,39.6875 0.44515,-2.8e-4 0.89853,0.005 1.34375,0 30.36363,0.0189 60.56235,-10.93804 88.4375,-39.6875 29.56932,-10.38703 51.42097,-25.21563 71.9375,-40.84375 14.00112,-3.49589 67.08492,-33.05692 75.21875,-96.1875 5.43791,-15.66729 11.54562,-29.82287 15.1875,-49.53125 55.75404,-62.96499 20.09961,-140.42896 -19.53125,-164.53125 L 513.75,317.5625 c 0.20067,-64.85234 -29.43807,-91.28546 -64,-111.375 10.45669,-2.79844 21.25552,-5.1014 24.21875,-18.4375 17.96834,-4.6698 21.72758,-13.11382 23.53125,-22.0625 4.69775,-3.18132 20.42834,-12.11119 18.78125,-27.46875 8.80668,-6.17164 13.71661,-14.0899 11.21875,-25.3125 9.46494,-10.48097 11.9555,-19.141487 7.9375,-27.125 C 546.79575,71.447226 541.76316,64.018955 536.90625,56.5 545.42178,40.831625 537.90665,24.030329 514.125,26.84375 504.6626,12.72793 484.0263,15.934135 480.84375,16 477.27279,11.469494 472.55636,7.587992 458.0625,9.46875 448.67084,0.96656132 438.17071,2.41745 427.34375,6.59375 414.48455,-3.5536631 405.97149,4.580454 396.25,7.65625 380.67615,2.568472 377.11698,9.5371578 369.46875,12.375 352.4935,8.7869238 347.33315,16.598532 339.1875,24.84375 l -9.46875,-0.1875 c -25.61054,15.093115 -38.33378,45.825501 -42.84375,61.625 -4.51206,-15.801979 -17.20647,-46.534542 -42.8125,-61.625 l -9.46875,0.1875 C 226.4481,16.598532 221.28775,8.7869235 204.3125,12.375 196.66427,9.5371583 193.1051,2.5684729 177.53125,7.65625 c -6.37973,-2.0184911 -12.24667,-6.2144276 -19.15625,-6 z" style="fill:#000000" />
       <path d="m 107.39184,68.055583 c 67.94767,35.031357 107.44689,63.368967 129.08717,87.504467 -11.08235,44.41759 -68.89638,46.44464 -90.03559,45.19858 4.32842,-2.01474 7.93988,-4.42778 9.22051,-8.13574 -5.30449,-3.76981 -24.11289,-0.39719 -37.24363,-7.77416 5.04407,-1.04499 7.40348,-2.06302 9.76289,-5.78542 -12.40571,-3.9567 -25.76862,-7.36642 -33.627746,-13.92116 4.241253,0.0524 8.201156,0.9488 13.740366,-2.89271 -11.111694,-5.98819 -22.969108,-10.73351 -32.18139,-19.88738 5.745213,-0.14063 11.939452,-0.0568 13.740371,-2.16953 -10.17044,-6.30068 -18.751242,-13.30787 -25.853592,-20.97215 8.039979,0.97052 11.435284,0.13478 13.378782,-1.26556 -7.687795,-7.87419 -17.417559,-14.52319 -22.056911,-24.22644 5.969606,2.057484 11.431249,2.84506 15.36752,-0.180795 -2.612365,-5.893453 -13.805413,-9.369618 -20.248967,-23.141676 6.284359,0.609377 12.949606,1.371108 14.282753,0 C 61.802068,58.517346 56.796919,51.835885 51.887978,44.913906 65.338021,44.714177 85.715734,44.966253 84.792549,43.82914 l -8.31654,-8.497335 c 13.137617,-3.537241 26.580651,0.568164 36.339661,3.615887 4.38186,-3.457681 -0.0776,-7.82998 -5.42383,-12.294015 11.16496,1.490646 21.25382,4.057389 30.37345,7.593362 4.87238,-4.399329 -3.16389,-8.798658 -7.05098,-13.197987 17.24936,3.272568 24.55716,7.87068 31.81981,12.47481 5.26935,-5.050799 0.30166,-9.343299 -3.2543,-13.740371 13.00566,4.817048 19.70478,11.035551 26.75756,17.175463 2.39119,-3.227053 6.07494,-5.592408 1.62715,-13.378781 9.23416,5.322725 16.18926,11.59506 21.33374,18.621817 5.71336,-3.637941 3.40387,-8.613023 3.43509,-13.197987 9.59665,7.806516 15.68687,16.11395 23.14168,24.226443 1.50169,-1.093437 2.81661,-4.80171 3.97747,-10.666867 22.89539,22.211815 55.24591,78.158241 8.31654,100.340861 C 207.95028,109.95728 160.25292,86.016909 107.39184,68.055583 z" style="fill:#75a928" />
@@ -159,9 +161,9 @@
       <path d="m 405.0209,516.21177 c -25.18682,29.50165 -39.21227,83.30951 -20.83785,100.6428 17.56828,13.46361 64.7292,11.58162 99.56566,-36.75574 25.29599,-32.46471 16.82013,-86.68225 2.37077,-101.07511 -21.46408,-16.60213 -52.27691,4.64489 -81.09858,37.18805 z" style="fill:#bc1142" />
     </svg>
   </div> 
-  <div class="grid-item" data-cmnd-URL="http://192.168.1.60/cm?cmnd=" onclick="make_request(this, 'IR C4')" id="hdmi3"><i class="material-icons" style="letter-spacing: -7px !important">settings_input_hdmi</i><sub>3</sub></div>
+  <div class="grid-item" data-cmnd-URL="http://192.168.1.65:8060/keypress/" onclick="make_request(this, 'InputHDMI3')" id="hdmi3"><i class="material-icons" style="letter-spacing: -7px !important">settings_input_hdmi</i><sub>3</sub></div>
 
-  <div class="grid-item" data-cmnd-URL="http://192.168.1.60/cm?cmnd=" onclick="make_request(this, 'IR D4')" id="antenna">
+  <div class="grid-item" data-cmnd-URL="http://192.168.1.65:8060/keypress/" onclick="make_request(this, 'InputTuner')" id="antenna">
     <!--https://icons8.com/license-->
     <svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" viewBox="0 0 28 28" xml:space="preserve">
       <g fill="#FFFFFF">
@@ -169,8 +171,9 @@
       </g>
     </svg>
   </div>
-  <div class="grid-item" data-cmnd-URL="http://192.168.1.60/cm?cmnd=" onclick="make_request(this, 'IR 94')" id="mediaplayer"><i class="material-icons" style="letter-spacing: -5px !important">usb</i><i class="material-icons">video_library</i></div>
-  <div class="grid-item" data-cmnd-URL="http://192.168.1.60/cm?cmnd=" onclick="make_request(this, 'IR A5')" id="avinput">
+  <!--div class="grid-item" data-cmnd-URL="http://192.168.1.65:8060/keypress/" onclick="make_request(this, 'MediaPlayer')" id="mediaplayer"><i class="material-icons" style="letter-spacing: -5px !important">usb</i><i class="material-icons">video_library</i></div-->
+  <div class="grid-item">&nbsp;</div>
+  <div class="grid-item" data-cmnd-URL="http://192.168.1.65:8060/keypress/" onclick="make_request(this, 'InputAV1')" id="avinput">
     <svg version="1.0" xmlns="http://www.w3.org/2000/svg" x="0px" y="0px" viewBox="0 0 452.000000 452.000000" preserveAspectRatio="xMidYMid meet">
       <g transform="translate(0.000000,452.000000) scale(0.100000,-0.100000)" fill="#FFFFFF" stroke="none">
         <path d="M3151 4455 c-24 -7 -61 -27 -82 -44 -21 -17 -41 -31 -46 -31 -4 0 -109 -101 -233 -225 l-225 -225 -73 25 c-227 77 -397 55 -506 -66 -58 -65 -76 -123 -76 -248 0 -152 48 -315 149 -514 134 -261 363 -566 567 -753 383 -352 755 -547 1013 -532 88 5 115 17 224 100 57 44 84 72 104 111 51 99 40 324 -24 477 l-15 35 257 253 c197 194 261 263 277 300 30 66 36 191 13 285 -20 86 -86 231 -145 316 l-42 63 66 68 c92 95 111 140 111 260 0 82 -4 103 -26 151 -37 79 -90 133 -167 171 -61 30 -74 33 -162 33 -120 -1 -177 -26 -269 -119 l-64 -64 -54 35 c-81 51 -230 120 -298 138 -72 18 -214 19 -274 0z m228 -252 c29 -9 87 -37 130 -62 l77 -46 -137 -132 -136 -133 -31 58 c-47 88 -72 174 -72 245 0 36 5 68 12 75 17 17 97 15 157 -5z m801 -18 c10 -9 22 -30 25 -46 16 -70 8 -80 -298 -382 l-290 -288 -74 73 -73 73 299 299 299 299 47 -5 c25 -3 54 -13 65 -23z m-1192 -257 c16 -62 84 -197 143 -286 96 -142 253 -313 399 -434 117 -97 292 -200 388 -228 23 -7 42 -16 42 -19 0 -11 -304 -308 -327 -320 -88 -45 -305 43 -513 208 -273 216 -504 569 -488 745 3 30 27 59 168 205 91 93 168 170 171 170 4 1 11 -18 17 -41z m1167 -415 c67 -115 103 -250 77 -289 -22 -33 -88 -42 -172 -23 -40 9 -180 72 -220 98 -12 9 11 37 125 151 77 77 141 140 142 140 1 0 23 -35 48 -77z"/>
@@ -194,7 +197,7 @@ function make_request(element, command) {
 		xmlhttp.onabort   = function() {element.parentElement.style.color = "red"; setTimeout(function(){element.parentElement.style.color = "white"}, 2000)};
 		xmlhttp.ontimeout = function() {element.parentElement.style.color = "red"; setTimeout(function(){element.parentElement.style.color = "white"}, 2000)};
 
-		xmlhttp.open("GET", element.getAttribute("data-cmnd-URL")+command, true);
+		xmlhttp.open("POST", element.getAttribute("data-cmnd-URL")+command, true);
 		xmlhttp.timeout = 1500;
 		xmlhttp.send();
 }

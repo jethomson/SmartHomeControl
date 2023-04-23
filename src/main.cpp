@@ -1068,14 +1068,17 @@ void web_server_initiate() {
 	});
 
 	web_server.on("/smart_devices.json", HTTP_GET, [](AsyncWebServerRequest *request) {
-		//AsyncWebServerResponse *response = request->beginResponse(200, "application/json", smart_devices_JSON_string.c_str());
 		AsyncWebServerResponse *response = request->beginResponse(200, "application/json", smart_devices_JSON_string.c_str());
 		response->addHeader("Access-Control-Allow-Origin", CORS_value.c_str());
 		request->send(response);
 	});
 
 	web_server.on("/TV", HTTP_GET, [](AsyncWebServerRequest *request) {
-		request->send(LittleFS, "/TV.html");
+		request->send(LittleFS, "/TV_IR.html");
+	});
+
+	web_server.on("/TV_ECP", HTTP_GET, [](AsyncWebServerRequest *request) {
+		request->send(LittleFS, "/TV_ECP.html");
 	});
 
 	web_server.on("/console", HTTP_GET, [](AsyncWebServerRequest *request) {
