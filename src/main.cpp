@@ -83,6 +83,7 @@ const uint32_t PD_Phone_Check_Interval = 900000; // 15 minutes in ms. how often 
 const uint32_t PD_On_Away_Power_Off_Delay = 600000; // 10 minutes in ms. only want to power off if gone for an extended period of time.
 const uint32_t PD_WiFi_Connect_Delay = 120000; // 2 minutes in ms. allow time for phone to connect to WiFi.
 const IPAddress phone_ip(192, 168, 1, 142);
+const IPAddress tv_ip(192, 168, 1, 65);
 
 
 //#define DEBUG_CONSOLE Serial
@@ -117,6 +118,7 @@ const IPAddress phone_ip(192, 168, 1, 142);
 #define WEEKEND_WAKEUP_TIME 28800
 
 #define BREATH 1
+
 
 
 WiFiUDP ntpUDP;
@@ -177,9 +179,13 @@ void handle_RF_command(void);
 void handle_presence_detection(void);
 void handle_smart_speaker_command(void);
 void handle_group_power_command(void);
+void handle_tv_command(void);
+
 
 void write_log(String);
 enum PhoneStates check_for_phone(void);
+static void cb_tv_query_offline(void);
+static void cb_tv_query_data(void *, AsyncClient *, void *, size_t);
 void transmit_IR_data(void);
 void http_cmnd(String);
 size_t simple_JSON_parse(string, string, size_t, vector<string> &);
@@ -188,7 +194,6 @@ void set_sleep_time(void);
 void show_leds(void);
 void handle_flash_bin(AsyncWebServerRequest *, const String &, size_t, uint8_t *, size_t, bool);
 string process_cmnd(char[]);
-
 
 
 void OTA_server_initiate(void);
@@ -562,6 +567,24 @@ void handle_group_power_command() {
 	}
 }
 
+// the normal mode of operation is for the client's browser to query all of the devices
+// however the TV's web sever does set CORS in the header so the browser blocks the result of the device-info query
+// as a workaround we use our SmartHomeControl device to make the query for us, since it does not respect CORS
+void get_tv_state() {
+	if (flag_get_tv_state) {
+		// when TV server is offline GET takes too long to timeout, so use ping to check if the server is online before attempting GET
+		if (Ping.ping(tv_ip, 1)) {
+			ahClient.init("GET", "http://192.168.1.65:8060/query/device-info", &cb_tv_query_data, &cb_tv_query_offline);
+			ahClient.send();
+			// callback will set tv_state
+		}
+		else {
+			tv_state = false;
+		}
+		flag_get_tv_state = false;
+	}
+}
+
 
 void write_log(String data) {
 	File f = LittleFS.open("/access_logC.txt", "r");
@@ -607,6 +630,62 @@ enum PhoneStates check_for_phone() {
 	}
 	return phone_state;
 }
+
+
+static void cb_tv_query_offline(void) {
+	tv_state = false;
+}
+
+
+static void cb_tv_query_data(void *arg, AsyncClient *c, void *data, size_t len) {
+	const uint8_t target_on_len = 7;
+	const uint8_t target_on[target_on_len] = {'P', 'o', 'w', 'e', 'r', 'O', 'n'};
+	const uint8_t target_off_len = 10;
+	const uint8_t target_off[target_off_len] = {'D', 'i', 's', 'p', 'l', 'a', 'y', 'O', 'f', 'f'};
+	static uint8_t match_score_on = 0;
+	static uint8_t match_score_off = 0;
+
+	uint8_t *d = (uint8_t *)data;
+	for (size_t i = 0; i < len; i++) {
+		if (d[i] == target_on[match_score_on]) {
+			match_score_on++;
+		}
+		else {
+			match_score_on = 0;
+		}
+
+		if (match_score_on == target_on_len) {
+			tv_state = true;
+			match_score_on = 0;
+			match_score_off = 0;
+			if (c) {
+				c->close(true);
+			}
+			return;
+		}
+
+		if (d[i] == target_off[match_score_off]) {
+			match_score_off++;
+		}
+		else {
+			match_score_off = 0;
+		}
+
+		if (match_score_off == target_off_len) {
+			tv_state = false;
+			match_score_on = 0;
+			match_score_off = 0;
+			if (c) {
+				c->close(true);
+			}
+			return;
+		}
+	}
+}
+
+
+
+
 
 
 void transmit_IR_data() {
@@ -850,7 +929,8 @@ string process_cmnd(char buf[]) {
 			message += "\"}";
 		}
 		else {
-			message += "\"POWERTV\":\"Unknown";
+			flag_get_tv_state = true;
+			message += "\"POWERTV\":\"" + string((tv_state) ? "ON" : "OFF");
 			message += "\"}";
 		}
 	}
@@ -1293,5 +1373,7 @@ void loop() {
 	fauxmo.handle();
 	handle_smart_speaker_command();
 	handle_group_power_command();
-	transmit_IR_data(); // other commands set ir_data so it's best to have transmit_IR_data() last
+	get_tv_state();
+	transmit_IR_data(); // other commands set ir_data so it's logical to have transmit_IR_data() last
+
 }
