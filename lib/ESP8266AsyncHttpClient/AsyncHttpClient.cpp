@@ -156,7 +156,7 @@ void AsyncHttpClient::send() {
 	}
 
 	// setConnectTimeout is only available for ESP32
-    //aClient->setConnectTimeout(3);
+	//aClient->setConnectTimeout(3);
 	// these are only effective after connection established
 	//aClient->setRxTimeout(2);
 	//aClient->setAckTimeout(1000);
