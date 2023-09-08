@@ -20,7 +20,7 @@ class NTPClient {
     TimeChangeRule _utcRule = {"UTC", Last, Sun, Mar, 1, 0};     // UTC
     Timezone*          _tz;
 
-    unsigned long _updateInterval = 50000;  // In ms, jthomson: changed to from 60000 to 50000 to allow an update if our clock is running fast (i.e. asks for an update before a minute has elapsed)
+    unsigned long _updateInterval = 50000;  // In ms, jthomson: changed from 60000 to 50000 to allow an update if our clock is running fast (i.e. asks for an update before a minute has elapsed)
 
     unsigned long _currentEpoc    = 0;      // In s
     unsigned long _lastUpdate     = 0;      // In ms
