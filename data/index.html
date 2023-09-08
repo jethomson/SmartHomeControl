@@ -715,8 +715,9 @@ var state_check_ceiling = 3000;  // milliseconds
 
 /*
 Deep sleep from home screen (no display input selected) is 0 A or 0.034 A with no response to query or ping
+Deep sleep from home screen will result in TV being completely turned off automatically (power button has to be pressed to turn back on)
 
-Sleep when on HDMI 1 (pressing any button will turn screen back on). Wil stay in light sleep for a long time (indefinitely?)
+Sleep when on HDMI 1 (pressing any button will turn screen back on). Will stay in light sleep for a long time (indefinitely?)
 0.216 A == query response of PowerOn
 */
 var tv_sleep_current_lb = 0.193;
