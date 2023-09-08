@@ -26,13 +26,16 @@
 
 #include <Arduino.h>
 
-#include "wifi_credentials.h" // set const char *ssid and const char *password in lib/wifi_credentials.h
+#include "credentials.h" // set const char *ssid and const char *password in include/credentials.h
 #include <ESP8266WiFi.h>
 #include <WiFiClient.h>
 #include <ESPAsyncTCP.h>
-#include <WiFiUdp.h>
+//#include <WiFiUdp.h>
 #include <ESPAsyncWebServer.h>
 #include <AsyncHttpClient.h>
+
+#include <Time.h>
+#include <TZ.h>
 
 #include <ESP8266Ping.h>
 
@@ -49,7 +52,6 @@
 #endif
 #include <ArduinoOTA.h>
 
-#include <NTPClient.h>
 #include <FastLED.h>
 #include <NeoPixelBus.h>
 
@@ -72,9 +74,10 @@
 #include <string.h>
 using namespace std;
 
+#define RTC_UTC_TEST 1510592825  // 1510592825 = Monday 13 November 2017 17:07:05 UTC
 
 //adjust these to your requirements
-#define LOCAL_IP IPAddress(192, 168, 1, 60)
+#define LOCAL_IP IPAddress(192, 168, 1, 88)
 #define GATEWAY IPAddress(192, 168, 1, 1)
 #define SUBNET_MASK IPAddress(255, 255, 255, 0)
 #define DNS1 IPAddress(1, 1, 1, 1)
@@ -119,18 +122,8 @@ const IPAddress tv_ip(192, 168, 1, 65);
 
 #define BREATH 1
 
-
-
-WiFiUDP ntpUDP;
-// US Eastern Time Zone (New York, Detroit)
-TimeChangeRule usEDT = {"EDT", Second, Sun, Mar, 2, -240};  // Eastern Daylight Time = UTC - 4 hours
-TimeChangeRule usEST = {"EST", First, Sun, Nov, 2, -300};   // Eastern Standard Time = UTC - 5 hours
-Timezone usET(usEDT, usEST);
-NTPClient timeClient(ntpUDP, "pool.ntp.org", usET);
-
+struct tm *local_now;
 uint32_t tic = 0;
-uint8_t h = 0;
-uint8_t m = 0;
 uint32_t num_tics_to_wakeup = 0;
 
 bool clock_running = true;
@@ -244,14 +237,14 @@ void handle_clock() {
 				update_time(2);
 
 				// turn off clock display at midnight
-				if (h == 0 && m == 0) {
+				if (local_now->tm_hour == 0 && local_now->tm_min == 0) {
 					clock_running = false;
 					set_sleep_time();
 				}
 			}
 
-			mi = ((m / 5) + OFFSET) % NUM_LEDS;
-			hi = (h + OFFSET) % NUM_LEDS;
+			mi = ((local_now->tm_min / 5) + OFFSET) % NUM_LEDS;
+			hi = (local_now->tm_hour + OFFSET) % NUM_LEDS;
 
 			if (BREATH) {
 				br = ((max_brightness - min_brightness) * abs((int8_t)(tic % TICS_PER_SEC) - (TICS_PER_SEC / 2))) / (TICS_PER_SEC / 2) + min_brightness;
@@ -295,7 +288,6 @@ void handle_clock() {
 		}
 	}
 }
-
 
 void handle_RF_command() {
 	static int last_good_value = 0;
@@ -603,10 +595,11 @@ void write_log(String data) {
 
 	f = LittleFS.open("/access_logC.txt", "a");
 	if (f) {
-		time_t epochTime = timeClient.getEpochTime();
-		struct tm *ptm = gmtime(&epochTime);
+		//time_t epochTime = timeClient.getEpochTime();
+		//struct tm *ptm = gmtime(&epochTime);
+    update_time(2);
 		char ts[23];
-		snprintf(ts, sizeof ts, "%d/%02d/%02d %02d:%02d:%02d - ", ptm->tm_year+1900, ptm->tm_mon+1, ptm->tm_mday, ptm->tm_hour, ptm->tm_min, ptm->tm_sec);
+		snprintf(ts, sizeof ts, "%d/%02d/%02d %02d:%02d:%02d - ", local_now->tm_year+1900, local_now->tm_mon+1, local_now->tm_mday, local_now->tm_hour, local_now->tm_min, local_now->tm_sec);
 		
 		//write_log crashes if it gets interrupted here. not sure why.
 		noInterrupts();
@@ -738,40 +731,43 @@ size_t simple_JSON_parse(string s, string key, size_t start_pos, vector<string> 
 
 
 bool update_time(int8_t num_attempts) {
-	bool retval = false;
-	uint8_t s = 0;
-
-	num_attempts--;
 	if (num_attempts >= 0) {
-		retval = timeClient.update();
-		if (retval) {
-			DEBUG_PRINT("ut: ");
-			DEBUG_PRINTLN(timeClient.getFormattedTime());
-			time_update_needed = false;
-			s = timeClient.getSeconds();
-			h = timeClient.getHours();
-			m = timeClient.getMinutes();
-			tic = TICS_PER_SEC * s;
+		time_t utc_now;
+		utc_now = time(nullptr);
+
+		// create some delay before printing
+		while (num_attempts > 0 && utc_now < RTC_UTC_TEST) {
+        delay(500);
+        time(&utc_now);
+        num_attempts--;
 		}
-		else {
-			retval = update_time(num_attempts);
-		}
+
+    if (num_attempts == 0) {
+      return false;
+    }
+
+		local_now = localtime(&utc_now);
+	
+		//DEBUG_PRINT("ut: ");
+		//DEBUG_PRINTLN(timeClient.getFormattedTime());
+		time_update_needed = false;
+		tic = TICS_PER_SEC * local_now->tm_sec;
+
+	  if (local_now->tm_hour > 23 || local_now->tm_min > 59 || local_now->tm_sec > 59) {
+	  	delay(2000);
+	  	ESP.restart();
+	  }
 	}
 
-	if (h > 23 || m > 59 || s > 59) {
-		delay(2000);
-		ESP.restart();
-	}
-
-	return retval;
+	return true;
 }
 
 
 void set_sleep_time() {
 	update_time(2);
 	tic = 0;
-	uint32_t seconds_since_midnight = 3600*timeClient.getHours() + 60*timeClient.getMinutes() + timeClient.getSeconds();
-	uint8_t day_of_the_week = timeClient.getDay();
+	uint32_t seconds_since_midnight = 3600*local_now->tm_hour + 60*local_now->tm_min + local_now->tm_sec;
+	uint8_t day_of_the_week = local_now->tm_wday;
 
 	if (day_of_the_week == 1 || day_of_the_week == 2 || day_of_the_week == 3 || day_of_the_week == 4) { // Monday-Thursday
 		if (seconds_since_midnight > (uint32_t) WEEKDAY_WAKEUP_TIME) {
@@ -1126,7 +1122,7 @@ void web_server_initiate() {
 
 	//OTA update via web page
 	//AsyncCallbackWebHandler& on(const char* uri, WebRequestMethodComposite method, ArRequestHandlerFunction onRequest, ArUploadHandlerFunction onUpload);
-	web_server.on("/flash_bin", HTTP_POST,	[](AsyncWebServerRequest *request) {}, handle_flash_bin);
+	web_server.on("/flash_bin", HTTP_POST, [](AsyncWebServerRequest *request) {}, handle_flash_bin);
 
 	// Using an older version of fauxmo library because I want smart sockets not smart bulbs.
 	// Using fauxmo smart sockets lets me tell Alexa to turn off all the lights without affecting all fauxmo devices.
@@ -1263,9 +1259,10 @@ void clock_initiate() {
 	strip.Begin();
 	strip.Show(); // Set to black (^= off) after reset
 
-	timeClient.begin();
+	configTime(TZ_America_New_York, "pool.ntp.org");
+
 	update_time(2);
-	//Serial.println(timeClient.getFormattedTime());
+
 }
 
 
@@ -1321,6 +1318,11 @@ void setup() {
 	fauxmo_initiate();
 	clock_initiate();
 
+  Serial.print("hour: ");
+  Serial.println(local_now->tm_hour);
+  Serial.print("minute: ");
+  Serial.println(local_now->tm_min);
+
 	// a WebSerial message sent here likely won't make it to the console because the client won't have established a connection yet
 	DEBUG_CONSOLE.println("SmartHomeControl - Power On");
 	write_log("SHC on");
@@ -1346,6 +1348,12 @@ void setup() {
 
 
 void loop() {
+	static uint32_t pm = millis(); // previous millis
+	if ((millis() - pm) >= 2000) {
+		pm = millis();
+		Serial.println(ESP.getFreeHeap(),DEC);
+	}
+
 	//ESP.wdtFeed();
 	ArduinoOTA.handle();
 
