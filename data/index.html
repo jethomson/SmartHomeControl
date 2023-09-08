@@ -271,25 +271,25 @@
 <body>
 <div style="display:inline-block">
 	<div id="maindiv" class="grid-container" style="visibility: hidden">
-	  	<div id="insert_groups_before_here" style="display: none"></div>
-	  	<div id="insert_singletons_before_here" style="display: none"></div>
-	  	<div id="tv_button" class="grid-item-button">
+			<div id="insert_groups_before_here" style="display: none"></div>
+			<div id="insert_singletons_before_here" style="display: none"></div>
+			<div id="tv_button" class="grid-item-button">
 			<a href="/TV" comment="use <a> instead of <form> because want to be able to open remote in a new tab"><button name="" title="Uses IR to control TV">TV Remote</button></a>
 		</div>
-	  	<div id="tv_button" class="grid-item-button">
+			<div id="tv_button" class="grid-item-button">
 			<a href="/TV_ECP" comment="use <a> instead of <form> because want to be able to open remote in a new tab"><button name="" title="Uses Roku's External Control Protocol to control TV">TV Remote (ECP)</button></a>
 		</div>
-	  	<div id="console_button" class="grid-item-button">
+			<div id="console_button" class="grid-item-button">
 			<a href="/console"><button name="">Console</button></a>
 		</div>
-	  	<div id="console_button" class="grid-item-button">
+			<div id="console_button" class="grid-item-button">
 			<a href="/access_log"><button name="">Access Log</button></a>
 		</div>
-	  	<!--div class="grid-item-button" style="display: none"-->
-	  	<div class="grid-item-button">
+			<!--div class="grid-item-button" style="display: none"-->
+			<div class="grid-item-button">
 			<form action="select_bin" method="get"><button name="">Select Bin File</button></form>
 		</div>
-	  	<div class="grid-item-button">
+			<div class="grid-item-button">
 			<form action="restart" method="get" onsubmit="return confirm(&quot;Confirm Restart&quot;);"><button name="" class="button bred">Restart</button></form>
 		</div>
 	</div>
@@ -397,7 +397,7 @@ function tv_power_info(element, responseText) {
 	// TV on, no input, screen blanked: ~0.192 A, ~0.201 A current might fluctuate too much to be able to set a cutoff between OFF and NO INPUT blank
 	// TV on, sleep, screen blanked: current is ~0.215 A
 	// TV on, active: current is ~1.688 A
-		
+
 	if (t2 !== undefined) {
 		avg = process_current(presponse.StatusSNS.ENERGY.Current);
 
@@ -409,7 +409,7 @@ function tv_power_info(element, responseText) {
 		}
 	}
 
-	
+
 	return inputChecked;
 }
 
@@ -421,7 +421,7 @@ function update_smart_checkbox(element, responseText) {
 		var POWERx = element.getAttribute("data-switch-status").split("cm?cmnd=")[1].toUpperCase();
 		var t1 = (presponse || {})[POWERx];
 	
-		
+
 		if (typeof t1 === "undefined" && element.id != "smart_text_TV" && element.id != "smart_checkbox_TV") {
 			console.log("undefined");
 			console.log(element.id);
@@ -715,7 +715,6 @@ var state_check_ceiling = 3000;  // milliseconds
 
 /*
 Deep sleep from home screen (no display input selected) is 0 A or 0.034 A with no response to query or ping
-Deep sleep from home screen will result in TV being completely turned off automatcally (power button has to be pressed to turn back on)
 
 Sleep when on HDMI 1 (pressing any button will turn screen back on). Wil stay in light sleep for a long time (indefinitely?)
 0.216 A == query response of PowerOn
