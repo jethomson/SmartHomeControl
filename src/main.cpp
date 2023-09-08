@@ -34,7 +34,7 @@
 #include <ESPAsyncWebServer.h>
 #include <AsyncHttpClient.h>
 
-#include <Time.h>
+#include <time.h>
 #include <TZ.h>
 
 #include <ESP8266Ping.h>
@@ -107,7 +107,7 @@ const IPAddress tv_ip(192, 168, 1, 65);
 
 #define LED 2 // onboard LED
 
-#define DATA_PIN 2	// this project doesn't connect LEDs to this pin but setting DATA_PIN is still necessary for FastLED to run correctly
+#define DATA_PIN 2  // this project doesn't connect LEDs to this pin but setting DATA_PIN is still necessary for FastLED to run correctly
 #define NUM_LEDS 12 // ring has 12 LEDs
 #define OFFSET 6
 #define COLOR_ORDER GRB
@@ -597,7 +597,7 @@ void write_log(String data) {
 	if (f) {
 		//time_t epochTime = timeClient.getEpochTime();
 		//struct tm *ptm = gmtime(&epochTime);
-    update_time(2);
+		update_time(2);
 		char ts[23];
 		snprintf(ts, sizeof ts, "%d/%02d/%02d %02d:%02d:%02d - ", local_now->tm_year+1900, local_now->tm_mon+1, local_now->tm_mday, local_now->tm_hour, local_now->tm_min, local_now->tm_sec);
 		
@@ -737,26 +737,26 @@ bool update_time(int8_t num_attempts) {
 
 		// create some delay before printing
 		while (num_attempts > 0 && utc_now < RTC_UTC_TEST) {
-        delay(500);
-        time(&utc_now);
-        num_attempts--;
+			delay(500);
+			time(&utc_now);
+			num_attempts--;
 		}
 
-    if (num_attempts == 0) {
-      return false;
-    }
+		if (num_attempts == 0) {
+			return false;
+		}
 
 		local_now = localtime(&utc_now);
-	
+
 		//DEBUG_PRINT("ut: ");
 		//DEBUG_PRINTLN(timeClient.getFormattedTime());
 		time_update_needed = false;
 		tic = TICS_PER_SEC * local_now->tm_sec;
 
-	  if (local_now->tm_hour > 23 || local_now->tm_min > 59 || local_now->tm_sec > 59) {
-	  	delay(2000);
-	  	ESP.restart();
-	  }
+		if (local_now->tm_hour > 23 || local_now->tm_min > 59 || local_now->tm_sec > 59) {
+			delay(2000);
+			ESP.restart();
+		}
 	}
 
 	return true;
@@ -818,7 +818,7 @@ void show_leds() {
 void handle_flash_bin(AsyncWebServerRequest *request, const String &filename, size_t index, uint8_t *data, size_t len, bool final) {
 	//ESP.wdtDisable();
 
-	if (!index)	{
+	if (!index) {
 		size_t filesize = 0;
 
 		// contentLength() includes the count of bytes in bin file plus the bytes in the header and footer.
@@ -1318,10 +1318,10 @@ void setup() {
 	fauxmo_initiate();
 	clock_initiate();
 
-  Serial.print("hour: ");
-  Serial.println(local_now->tm_hour);
-  Serial.print("minute: ");
-  Serial.println(local_now->tm_min);
+	Serial.print("hour: ");
+	Serial.println(local_now->tm_hour);
+	Serial.print("minute: ");
+	Serial.println(local_now->tm_min);
 
 	// a WebSerial message sent here likely won't make it to the console because the client won't have established a connection yet
 	DEBUG_CONSOLE.println("SmartHomeControl - Power On");
