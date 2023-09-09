@@ -30,7 +30,6 @@
 #include <ESP8266WiFi.h>
 #include <WiFiClient.h>
 #include <ESPAsyncTCP.h>
-//#include <WiFiUdp.h>
 #include <ESPAsyncWebServer.h>
 #include <AsyncHttpClient.h>
 
@@ -40,6 +39,7 @@
 #include <ESP8266Ping.h>
 
 #include <WebSerial.h>
+#include <ESP_Mail_Client.h>
 
 #ifdef ESP8266
 #include <Updater.h>
@@ -77,13 +77,15 @@ using namespace std;
 #define RTC_UTC_TEST 1510592825  // 1510592825 = Monday 13 November 2017 17:07:05 UTC
 
 //adjust these to your requirements
-#define LOCAL_IP IPAddress(192, 168, 1, 88)
+#define LOCAL_IP IPAddress(192, 168, 1, 60)
 #define GATEWAY IPAddress(192, 168, 1, 1)
 #define SUBNET_MASK IPAddress(255, 255, 255, 0)
 #define DNS1 IPAddress(1, 1, 1, 1)
 #define DNS2 IPAddress(9, 9, 9, 9)
-const uint32_t PD_Phone_Check_Interval = 900000; // 15 minutes in ms. how often we look for presence of phone.
-const uint32_t PD_On_Away_Power_Off_Delay = 600000; // 10 minutes in ms. only want to power off if gone for an extended period of time.
+//const uint32_t PD_Phone_Check_Interval = 900000; // 15 minutes in ms. how often we look for presence of phone.
+//const uint32_t PD_On_Away_Power_Off_Delay = 600000; // 10 minutes in ms. only want to power off if gone for an extended period of time.
+const uint32_t PD_Phone_Check_Interval = 180000; // 3 minutes in ms. how often we look for presence of phone.
+const uint32_t PD_On_Away_Power_Off_Delay = 60000; // 1 minute in ms. only want to power off if gone for an extended period of time.
 const uint32_t PD_WiFi_Connect_Delay = 120000; // 2 minutes in ms. allow time for phone to connect to WiFi.
 const IPAddress phone_ip(192, 168, 1, 142);
 const IPAddress tv_ip(192, 168, 1, 65);
@@ -143,6 +145,8 @@ enum class PhoneStates {HERE, AWAY};
 enum class PD_Triggers {NONE = 0, TIMER = 1, DOOR = 2};
 enum PD_Triggers pd_trigger = PD_Triggers::NONE;
 
+SMTPSession smtp;
+
 fauxmoESP fauxmo;
 enum SmartCommand {SC_DO_NOTHING, SC_TV_ON, SC_TV_OFF, SC_PLAYPAUSE, SC_CLOCK_ON, SC_CLOCK_OFF};
 SmartCommand sc = SC_DO_NOTHING;
@@ -174,10 +178,12 @@ void handle_presence_detection(void);
 void handle_smart_speaker_command(void);
 void handle_group_power_command(void);
 void handle_tv_command(void);
+void get_tv_state(void);
 
 
 void write_log(String);
 enum PhoneStates check_for_phone(void);
+void smtp_notify(const char*);
 static void cb_tv_query_offline(void);
 static void cb_tv_query_data(void *, AsyncClient *, void *, size_t);
 void transmit_IR_data(void);
@@ -403,7 +409,9 @@ void handle_presence_detection() {
 			if (door_opened_while_away) {
 				door_opened_while_away = false; // clear flag, so multiple entries can be logged while away.
 				DEBUG_PRINTLN("pd: DOOR OPENED WHILE AWAY");
-				write_log("pd: DOOR OPENED WHILE AWAY");				
+				write_log("pd: DOOR OPENED WHILE AWAY");
+				//notify(smtp_host, smtp_port, author_email, author_password, recipient_email, "pd: DOOR OPENED WHILE AWAY");
+
 			}
 		}
 		else if (phone_state == PhoneStates::HERE) {
@@ -613,7 +621,6 @@ void write_log(String data) {
 	}
 }
 
-
 enum PhoneStates check_for_phone() {
 	enum PhoneStates phone_state = PhoneStates::AWAY;
 	phone_state = Ping.ping(phone_ip, 1) ? PhoneStates::HERE : PhoneStates::AWAY;
@@ -623,6 +630,66 @@ enum PhoneStates check_for_phone() {
 		phone_state = Ping.ping(phone_ip, 5) ? PhoneStates::HERE : PhoneStates::AWAY; // 5 pings
 	}
 	return phone_state;
+}
+
+// need to look into certs as related to SMTP
+// const char rootCACert[] PROGMEM = "-----BEGIN CERTIFICATE-----\n"
+//                                   "-----END CERTIFICATE-----\n";
+//void smtp_notify(const char* smtp_host, const int smtp_port, const char* author_email, const char* author_password, const char* recipient_email, const char* body) {
+void smtp_notify(const char* body) {
+	Session_Config config;
+	config.server.host_name = smtp_host;
+	config.server.port = smtp_port;
+	config.login.email = author_email;
+	config.login.password = author_password;
+	config.login.user_domain = F("127.0.0.1");
+
+	//If non-secure port is prefered (not allow SSL and TLS connection), use
+	//config.secure.mode = esp_mail_secure_mode_nonsecure;
+
+	//If SSL and TLS are always required, use
+	//config.secure.mode = esp_mail_secure_mode_ssl_tls;
+
+	//To disable SSL permanently (use less program space), define ESP_MAIL_DISABLE_SSL in ESP_Mail_FS.h
+	//or Custom_ESP_Mail_FS.h
+
+	//config.secure.mode = esp_mail_secure_mode_nonsecure;
+
+	SMTP_Message message;
+	message.sender.name = F("SmartHome Notifier");
+	message.sender.email = author_email;
+
+	message.subject = F("SmartHome Notification");
+	message.addRecipient(F("User"), recipient_email);
+
+	message.text.content = body;
+	message.text.charSet = F("us-ascii");
+	message.text.transfer_encoding = Content_Transfer_Encoding::enc_7bit;
+	message.priority = esp_mail_smtp_priority::esp_mail_smtp_priority_normal;
+	message.addHeader(message_id);
+
+	//smtp.setSystemTime(1693876380, 16);
+	//time is set else using the time library's configTime()
+
+	if (!smtp.connect(&config)) {
+		MailClient.printf("Connection error, Status Code: %d, Error Code: %d, Reason: %s", smtp.statusCode(), smtp.errorCode(), smtp.errorReason().c_str());
+	return;
+	}
+
+	if (!smtp.isLoggedIn()) {
+		DEBUG_PRINTLN("\nNot yet logged in.");
+	}
+	else {
+		if (smtp.isAuthenticated()) {
+			DEBUG_PRINTLN("\nSuccessfully logged in.");
+		}
+		else {
+			DEBUG_PRINTLN("\nConnected with no Auth.");
+		}
+	}
+
+	MailClient.sendMail(&smtp, &message);
+	smtp.sendingResult.clear();
 }
 
 
