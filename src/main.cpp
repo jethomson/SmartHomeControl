@@ -879,16 +879,6 @@ void write_log(String data) {
 	}
 }
 
-enum PhoneStates check_for_phone() {
-	enum PhoneStates phone_state = PhoneStates::AWAY;
-	phone_state = Ping.ping(phone_ip, 1) ? PhoneStates::HERE : PhoneStates::AWAY;
-	if (phone_state == PhoneStates::AWAY) {
-		// try again when ping fails with more pings to be more certain phone is not here
-		// because it's annoying for the lights to turn out when you are home because of a missed ping
-		phone_state = Ping.ping(phone_ip, 5) ? PhoneStates::HERE : PhoneStates::AWAY; // 5 pings
-	}
-	return phone_state;
-}
 
 // need to look into certs as related to SMTP
 // const char rootCACert[] PROGMEM = "-----BEGIN CERTIFICATE-----\n"
