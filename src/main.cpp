@@ -36,7 +36,7 @@
 #include <time.h>
 #include <TZ.h>
 
-#include <ESP8266Ping.h>
+#include <AsyncPing.h>
 
 #include <WebSerial.h>
 #include <ESP_Mail_Client.h>
@@ -82,10 +82,10 @@ using namespace std;
 #define SUBNET_MASK IPAddress(255, 255, 255, 0)
 #define DNS1 IPAddress(1, 1, 1, 1)
 #define DNS2 IPAddress(9, 9, 9, 9)
-//const uint32_t PD_Phone_Check_Interval = 900000; // 15 minutes in ms. how often we look for presence of phone.
-//const uint32_t PD_On_Away_Power_Off_Delay = 600000; // 10 minutes in ms. only want to power off if gone for an extended period of time.
-const uint32_t PD_Phone_Check_Interval = 180000; // 3 minutes in ms. how often we look for presence of phone.
-const uint32_t PD_On_Away_Power_Off_Delay = 60000; // 1 minute in ms. only want to power off if gone for an extended period of time.
+const uint32_t PD_Phone_Check_Interval = 900000; // 15 minutes in ms. how often we look for presence of phone.
+const uint32_t PD_On_Away_Power_Off_Delay = 600000; // 10 minutes in ms. only want to power off if gone for an extended period of time.
+//const uint32_t PD_Phone_Check_Interval = 180000; // DEBUG. 3 minutes in ms. how often we look for presence of phone.
+//const uint32_t PD_On_Away_Power_Off_Delay = 60000; // DEBUG. 1 minute in ms. only want to power off if gone for an extended period of time.
 const uint32_t PD_WiFi_Connect_Delay = 120000; // 2 minutes in ms. allow time for phone to connect to WiFi.
 const IPAddress phone_ip(192, 168, 1, 142);
 const IPAddress tv_ip(192, 168, 1, 65);
@@ -124,6 +124,11 @@ const IPAddress tv_ip(192, 168, 1, 65);
 
 #define BREATH 1
 
+#define NUM_PINGS 5
+#define PING_TIMEOUT 1000
+
+#define TV_QUERY_URL "http://192.168.1.65:8060/query/device-info"
+
 struct tm *local_now;
 uint32_t tic = 0;
 uint32_t num_tics_to_wakeup = 0;
@@ -141,8 +146,16 @@ const uint8_t min_brightness = 2;
 
 RCSwitch rf_switch = RCSwitch();
 
+AsyncPing PingPhone;
+AsyncPing PingTV;
+
 enum class PhoneStates {HERE, AWAY};
-enum class PD_Triggers {NONE = 0, TIMER = 1, DOOR = 2};
+enum PhoneStates previous_phone_state = PhoneStates::AWAY;
+enum PhoneStates phone_state = PhoneStates::AWAY;
+bool phone_state_fresh = false;
+
+//enum class PD_Triggers {NONE = 0, TIMER = 1, DOOR = 2};
+enum class PD_Triggers {NONE = 0, PHONE = 1, DOOR = 2};
 enum PD_Triggers pd_trigger = PD_Triggers::NONE;
 
 SMTPSession smtp;
@@ -182,7 +195,6 @@ void get_tv_state(void);
 
 
 void write_log(String);
-enum PhoneStates check_for_phone(void);
 void smtp_notify(const char*);
 static void cb_tv_query_offline(void);
 static void cb_tv_query_data(void *, AsyncClient *, void *, size_t);
@@ -202,6 +214,7 @@ void web_server_initiate(void);
 void webserial_initiate(void);
 void fauxmo_initiate(void);
 void clock_initiate(void);
+void ping_initiate(void);
 
 
 void handle_clock() {
@@ -344,7 +357,8 @@ void handle_RF_command() {
 }
 
 
-void handle_presence_detection() {
+/*
+void handle_presence_detection_OLD() {
 	// We check for a phone by pinging its IP address at regular intervals (TIMER trigger).
 	// If the phone is HERE we assume its owner is here.
 	// We do not ping for the phone right when the door is opened because pinging can be slow and the phone may not be connected to WiFi yet.
@@ -410,7 +424,7 @@ void handle_presence_detection() {
 				door_opened_while_away = false; // clear flag, so multiple entries can be logged while away.
 				DEBUG_PRINTLN("pd: DOOR OPENED WHILE AWAY");
 				write_log("pd: DOOR OPENED WHILE AWAY");
-				//notify(smtp_host, smtp_port, author_email, author_password, recipient_email, "pd: DOOR OPENED WHILE AWAY");
+				smtp_notify(smtp_host, smtp_port, author_email, author_password, recipient_email, "pd: DOOR OPENED WHILE AWAY");
 
 			}
 		}
@@ -443,6 +457,233 @@ void handle_presence_detection() {
 			http_cmnd("http://192.168.1.66/cm?cmnd=POWER%20ON"); //lamp
 			http_cmnd("http://192.168.1.64/cm?cmnd=POWER%20ON"); //raspberry pi outlet
 
+
+			//process_cmnd("POWERCLOCK ON"); //compiles but does not execute. process_cmnd manipulates buf in place so it cannot be used on a constant string
+			char buf[] = "POWERCLOCK ON";
+			process_cmnd(buf);
+		}
+
+		if (phone_state == PhoneStates::AWAY) {
+			// this will only log a warning message if phone is not detected as HERE the next time it is pinged
+			door_opened_while_away = true;
+		}
+
+		DEBUG_PRINTLN("pd: door opened");
+		write_log("pd: door opened");
+		//http_cmnd("http://192.168.1.50/cm?cmnd=POWER%20TOGGLE"); //for testing
+	}
+
+	pd_trigger = PD_Triggers::NONE;
+}
+*/
+
+/*
+void handle_presence_detection_WORKS() {
+	// We check for a phone by pinging its IP address at regular intervals (TIMER trigger).
+	// If the phone is HERE we assume its owner is here.
+	// We do not ping for the phone right when the door is opened because pinging can be slow and the phone may not be connected to WiFi yet.
+	// Since we cannot rely on pinging to always give an immediate, correct phone state, we have to work with stale data, which makes the code tricky.
+
+	static bool door_opened_while_away = false;
+	static bool enable_welcome_light = false;
+
+	static uint32_t t1_interval = 0; // default to zero so check for phone happens on first call
+	static uint32_t t1_pm = millis(); // timer 1 previous millis
+	//static uint32_t t2_pm = millis();
+	static uint32_t door_opened_pm = 0;
+	static bool enable_away_power_off = false;
+	uint32_t dt = 0;
+
+
+	dt = millis() - t1_pm; // even when millis() overflows this still gives the correct time elapsed
+	//if (dt >= t1_interval) {
+	if (pd_trigger == PD_Triggers::NONE && dt >= t1_interval) {
+		t1_pm = millis();
+		// if the DOOR is opened t1_interval was shortened, so need to restore t1_interval in case it was changed
+		t1_interval = PD_Phone_Check_Interval;
+		//pd_trigger = PD_Triggers::TIMER;
+
+		// try to ping up to 5 times with a timeout of 1 second.
+		// if a response is received any pings requests remaining in the queue will be canceled
+		// trying up to 5 times assures the phone is actually not here instead of a ping being missed
+		PingPhone.begin(phone_ip, 5, 1000);
+	}
+
+	dt = millis() - door_opened_pm;
+	if (enable_away_power_off && dt >= PD_On_Away_Power_Off_Delay) {
+		enable_away_power_off = false;
+		door_opened_pm = 0;
+		//http_cmnd("http://192.168.1.50/cm?cmnd=POWER%20OFF"); //kitchen. for testing.
+
+		//phone_state = check_for_phone();
+		if (phone_state == PhoneStates::AWAY) {
+			char buf[] = "Group0 OFF"; //everything off
+			process_cmnd(buf);
+			DEBUG_PRINTLN("pd: away power off");
+			write_log("pd: away power off");
+		}
+	}
+
+	if (pd_trigger == PD_Triggers::PHONE) {
+		if (phone_state == PhoneStates::AWAY) {
+			enable_welcome_light = true;
+
+			// phone was here but now away so turn everything off.
+			// checking previous state ensures everything is only turned off once.
+			if (previous_phone_state == PhoneStates::HERE) {
+				// it is possible to miss a door open trigger
+				// if that happens set door_opened_pm to current millis()
+				if (door_opened_pm == 0) {
+					door_opened_pm = millis();
+				}
+				enable_away_power_off = true;
+				DEBUG_PRINTLN("pd: away");
+				write_log("pd: away");
+			}
+
+			if (door_opened_while_away) {
+				door_opened_while_away = false; // clear flag, so multiple entries can be logged while away.
+				DEBUG_PRINTLN("pd: DOOR OPENED WHILE AWAY");
+				write_log("pd: DOOR OPENED WHILE AWAY");
+				smtp_notify("pd: DOOR OPENED WHILE AWAY");
+			}
+		}
+		else if (phone_state == PhoneStates::HERE) {
+			door_opened_while_away = false;
+			if (previous_phone_state == PhoneStates::AWAY) {
+				// cannot do much here because we cannot be certain if phone was detected as HERE before entering (triggering DOOR)
+				DEBUG_PRINTLN("pd: here");
+				write_log("pd: here");
+			}
+			else {
+				enable_welcome_light = false;
+				enable_away_power_off = false;
+			}
+		}
+	}
+	else if (pd_trigger == PD_Triggers::DOOR) {
+		door_opened_pm = millis();
+
+		// door was opened so check for phone using a TIMER trigger after PD_WiFi_Connect_Delay.
+		// the delay gives time for phone to connect/drop WiFi (arriving/leaving).
+		// if the delay is not long enough false DOOR OPENED WHILE AWAY messages will be logged
+		t1_pm = millis();
+		t1_interval = PD_WiFi_Connect_Delay;
+
+		// cannot use (phone_state == PhoneStates::AWAY) reliably to detect entering because the phone may have been detected before entering
+		if (enable_welcome_light) {
+			enable_welcome_light = false;
+			http_cmnd("http://192.168.1.50/cm?cmnd=POWER%20ON"); //kitchen
+			http_cmnd("http://192.168.1.66/cm?cmnd=POWER%20ON"); //lamp
+			http_cmnd("http://192.168.1.64/cm?cmnd=POWER%20ON"); //raspberry pi outlet
+
+
+			//process_cmnd("POWERCLOCK ON"); //compiles but does not execute. process_cmnd manipulates buf in place so it cannot be used on a constant string
+			char buf[] = "POWERCLOCK ON";
+			process_cmnd(buf);
+		}
+
+		if (phone_state == PhoneStates::AWAY) {
+			// this will only log a warning message if phone is not detected as HERE the next time it is pinged
+			door_opened_while_away = true;
+		}
+
+		DEBUG_PRINTLN("pd: door opened");
+		write_log("pd: door opened");
+		//http_cmnd("http://192.168.1.50/cm?cmnd=POWER%20TOGGLE"); //for testing
+	}
+
+	pd_trigger = PD_Triggers::NONE;
+}
+*/
+ 
+void handle_presence_detection() {
+	// We check for a phone by pinging its IP address at regular intervals.
+	// If the phone is HERE we assume its owner is here.
+	// We do not ping for the phone right when the door is opened because pinging can be slow and the phone may not be connected to WiFi yet.
+	// Since we cannot rely on pinging to always give an immediate, correct phone state, we have to work with stale data, which makes the code tricky.
+
+	static bool door_opened_while_away = false;
+	static bool enable_welcome_light = false;
+
+	static uint32_t interval = 0; // default to zero so check for phone happens on first call
+	static uint32_t pm = millis(); // previous millis
+	static bool enable_away_power_off = false;
+	uint32_t dt = 0;
+
+
+	dt = millis() - pm; // even when millis() overflows this still gives the correct time elapsed
+	if (pd_trigger == PD_Triggers::NONE && dt >= interval) {
+		pm = millis();
+		// if the DOOR is opened interval was shortened, so need to restore interval in case it was changed
+		interval = PD_Phone_Check_Interval;
+
+		// try to ping up to 5 times with a timeout of 1 second.
+		// if a response is received any pings requests remaining in the queue will be cancelled
+		// trying up to 5 times assures the phone is actually not here instead of a ping being missed
+		PingPhone.begin(phone_ip, NUM_PINGS, PING_TIMEOUT);
+	}
+
+
+	if (pd_trigger == PD_Triggers::PHONE) {
+		if (phone_state == PhoneStates::AWAY) {
+			enable_welcome_light = true;
+
+			if (previous_phone_state == PhoneStates::HERE) {
+				// phone was HERE but now AWAY so allow power off and start power off timer
+				// checking previous state ensures everything is only turned off once.
+				enable_away_power_off = true;
+				pm = millis();
+				interval = PD_On_Away_Power_Off_Delay;
+				DEBUG_PRINTLN("pd: away");
+				write_log("pd: away");
+			}
+			else if (previous_phone_state == PhoneStates::AWAY) {
+				// phone was found to be AWAY twice so assume it is not returning soon and power everything off
+				if (enable_away_power_off) {
+					enable_away_power_off = false;
+					char buf[] = "Group0 OFF"; //everything off
+					process_cmnd(buf);
+					DEBUG_PRINTLN("pd: away power off");
+					write_log("pd: away power off");
+				}
+			}
+
+			if (door_opened_while_away) {
+				door_opened_while_away = false; // clear flag, so multiple entries can be logged while away.
+				DEBUG_PRINTLN("pd: DOOR OPENED WHILE AWAY");
+				write_log("pd: DOOR OPENED WHILE AWAY");
+				//smtp_notify(smtp_host, smtp_port, author_email, author_password, recipient_email, "pd: DOOR OPENED WHILE AWAY");
+				smtp_notify("pd: DOOR OPENED WHILE AWAY");
+			}
+		}
+		else if (phone_state == PhoneStates::HERE) {
+			door_opened_while_away = false;
+
+			if (previous_phone_state == PhoneStates::AWAY) {
+				// cannot do much here because we cannot be certain if phone was detected as HERE before entering (triggering DOOR)
+				DEBUG_PRINTLN("pd: here");
+				write_log("pd: here");
+			}
+			else if (previous_phone_state == PhoneStates::HERE) {
+				enable_welcome_light = false;
+				enable_away_power_off = false;
+			}
+		}
+	}
+	else if (pd_trigger == PD_Triggers::DOOR) {
+		// door was opened so check for phone after PD_WiFi_Connect_Delay.
+		// the delay gives time for phone to connect/drop WiFi (arriving/leaving).
+		// if the delay is not long enough false DOOR OPENED WHILE AWAY messages will be logged
+		pm = millis();
+		interval = PD_WiFi_Connect_Delay;
+
+		// cannot use (phone_state == PhoneStates::AWAY) reliably to detect entering because the phone may have been detected before entering
+		if (enable_welcome_light) {
+			enable_welcome_light = false;
+			http_cmnd("http://192.168.1.50/cm?cmnd=POWER%20ON"); //kitchen
+			http_cmnd("http://192.168.1.66/cm?cmnd=POWER%20ON"); //lamp
+			//http_cmnd("http://192.168.1.64/cm?cmnd=POWER%20ON"); //raspberry pi outlet
 
 			//process_cmnd("POWERCLOCK ON"); //compiles but does not execute. process_cmnd manipulates buf in place so it cannot be used on a constant string
 			char buf[] = "POWERCLOCK ON";
@@ -571,18 +812,35 @@ void handle_group_power_command() {
 // the normal mode of operation is for the client's browser to query all of the devices
 // however the TV's web sever does set CORS in the header so the browser blocks the result of the device-info query
 // as a workaround we use our SmartHomeControl device to make the query for us, since it does not respect CORS
+//void get_tv_state() {
+//	if (flag_get_tv_state) {
+//		// when TV server is offline GET takes too long to timeout, so use ping to check if the server is online before attempting GET
+//		if (Ping.ping(tv_ip, 1)) {
+//			ahClient.init("GET", "http://192.168.1.65:8060/query/device-info", &cb_tv_query_data, &cb_tv_query_offline);
+//			ahClient.send();
+//			// callback will set tv_state
+//		}
+//		else {
+//			tv_state = false;
+//		}
+//		flag_get_tv_state = false;
+//	}
+//}
+
+
 void get_tv_state() {
-	if (flag_get_tv_state) {
-		// when TV server is offline GET takes too long to timeout, so use ping to check if the server is online before attempting GET
-		if (Ping.ping(tv_ip, 1)) {
-			ahClient.init("GET", "http://192.168.1.65:8060/query/device-info", &cb_tv_query_data, &cb_tv_query_offline);
-			ahClient.send();
-			// callback will set tv_state
-		}
-		else {
-			tv_state = false;
-		}
+	const uint32_t interval = 2000; 
+	static uint32_t pm = millis(); // previous millis
+	uint32_t dt = 0;
+
+	//the client should limit how frequently get_tv_state() is called but let's limit it here too to be safe
+	dt = millis() - pm;
+	if (flag_get_tv_state && dt >= interval) {
 		flag_get_tv_state = false;
+		pm = millis();
+		// when TV server is offline GET takes too long to timeout, so use ping to check if the server is online before attempting GET
+		// if a ping answered then PingTV's callback will do a GET on the TV's query URL to determine the TV's state
+		PingTV.begin(tv_ip, NUM_PINGS, PING_TIMEOUT);
 	}
 }
 
@@ -1332,12 +1590,66 @@ void clock_initiate() {
 
 }
 
+void ping_initiate() {
+	// callback for each answer/timeout of each ping
+	PingPhone.on(true, [](const AsyncPingResponse& response) {
+		// only need one response to confirm device is present
+		// but need multiple timeouts to confirm device is actually away
+		if (response.answer) {
+			return true; // if any more ping requests are queued, then cancel them
+		}
+		return false; // if any more ping requests are queued, then continue with them. 
+	});
+
+	// callback after all pings complete
+	PingPhone.on(false, [](const AsyncPingResponse& response) {
+		previous_phone_state = phone_state;
+		pd_trigger = PD_Triggers::PHONE;
+		if (response.answer) {
+			phone_state = PhoneStates::HERE;
+		}
+		else {
+			phone_state = PhoneStates::AWAY;
+		}
+		return false; // return value does not matter here
+	});
+
+	PingPhone.begin(phone_ip, NUM_PINGS, PING_TIMEOUT);
+	
+	// callback for each answer/timeout of each ping
+	PingTV.on(true, [](const AsyncPingResponse& response) {
+		// only need one response to confirm device is present
+		// but need multiple timeouts to confirm device is actually away
+		if (response.answer) {
+			return true; // if any more ping requests are queued, then cancel them
+		}
+		return false; // if any more ping requests are queued, then continue with them. 
+	});
+
+	// callback after all pings complete
+	PingTV.on(false, [](const AsyncPingResponse& response) {
+		if (response.answer) {
+			// the normal mode of operation is for the client's browser to query all of the devices
+			// however the TV's web sever does set CORS in the header so the browser blocks the result of the device-info query
+			// as a workaround we use our SmartHomeControl device to make the query for us, since it does not respect CORS
+			// cb_tv callbacks will set tv_state
+			ahClient.init("GET", TV_QUERY_URL, &cb_tv_query_data, &cb_tv_query_offline);
+			ahClient.send();
+		}
+		else {
+			tv_state = false;
+		}
+		return false; // return value does not matter here
+	});
+
+	PingTV.begin(tv_ip, NUM_PINGS, PING_TIMEOUT);
+}
 
 void setup() {
 	pinMode(LED, OUTPUT);
 	digitalWrite(LED, HIGH); // Our LED has inverse logic (high for OFF, low for ON)
 
-	Serial.begin(57600);
+	Serial.begin(115200);
 
 	OTA_server_initiate();
 
@@ -1379,6 +1691,7 @@ void setup() {
 	smart_devices_config_load();
 	web_server_initiate();
 	webserial_initiate();
+	ping_initiate();
 
 	rf_switch.enableReceive(digitalPinToInterrupt(12)); //D6 on HiLetgo ESLittleFS.remove("/access_logP.txt");P8266
 	irsend.begin();
@@ -1389,6 +1702,7 @@ void setup() {
 	Serial.println(local_now->tm_hour);
 	Serial.print("minute: ");
 	Serial.println(local_now->tm_min);
+
 
 	// a WebSerial message sent here likely won't make it to the console because the client won't have established a connection yet
 	DEBUG_CONSOLE.println("SmartHomeControl - Power On");
