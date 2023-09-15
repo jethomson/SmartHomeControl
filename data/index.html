@@ -298,7 +298,7 @@
 </div>
 
 
-<script>
+<script defer>
 function make_request(URL, element) {
 	var xmlhttp = new XMLHttpRequest();
 	xmlhttp.onreadystatechange = function() {
@@ -574,7 +574,7 @@ function enable_CORS() {
 function create_singleton_switches(responseText) {
 	var maindiv = document.getElementById("maindiv");
 	var insert_point = document.getElementById("insert_singletons_before_here");
-	
+
 	var devices = JSON.parse(responseText);
 	for (var d in devices) {
 		//if key starts with ! do not create a switch for it
@@ -686,22 +686,22 @@ function start() {
 }
 
 function load_config() {
-		var xmlhttp = new XMLHttpRequest();
-		xmlhttp.onreadystatechange = function() {
-			if (this.readyState == 4 && this.status == 200) {
-				create_singleton_switches(this.responseText);
-				create_group_switches();
-				start();
-			}
-		};
+	var xmlhttp = new XMLHttpRequest();
+	xmlhttp.onreadystatechange = function() {
+		if (this.readyState == 4 && this.status == 200) {
+			create_singleton_switches(this.responseText);
+			create_group_switches();
+			start();
+		}
+	};
 
-		xmlhttp.onerror   = function() {console.log("onerror")};
-		xmlhttp.onabort   = function() {console.log("onabort")};
-		xmlhttp.ontimeout = function() {console.log("ontimeout")};
+	xmlhttp.onerror   = function() {console.log("onerror")};
+	xmlhttp.onabort   = function() {console.log("onabort")};
+	xmlhttp.ontimeout = function() {console.log("ontimeout")};
 
-		xmlhttp.open("GET", server_base_URL+"/smart_devices.json", true);
-		xmlhttp.timeout = 1500;
-		xmlhttp.send();
+	xmlhttp.open("GET", server_base_URL+"/smart_devices.json", true);
+	xmlhttp.timeout = 1500;
+	xmlhttp.send();
 }
 
 
@@ -735,9 +735,14 @@ if (CORS_cmnd == "=CORS%20file://") {
 }
 CORS_URL = server_base_URL + "/cm?cmnd" + CORS_cmnd;
 console.log(CORS_URL);
-make_request(CORS_URL);
-
-load_config(); // calls create_switches() and start()
+//make_request(CORS_URL);
+//load_config(); // calls create_switches() and start()
+(async () => {
+	// must wait for setting CORS in Smart Home Control to finish before calling load_config()
+	// otherwise smart_devices.json will sometimes come back as corrupted
+	await fetch(CORS_URL);
+	load_config(); // calls create_switches() and start()
+})();
 
 </script>
 </body>
