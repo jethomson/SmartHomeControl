@@ -4,6 +4,5 @@
 .vscode/launch.json
 .vscode/ipch
 .vscode/extensions.json
-include/wifi_credentials.h
-include/credentials.h
+include/credentials_private.h
 src/code_snippets
