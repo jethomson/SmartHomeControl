@@ -26,7 +26,7 @@
 
 #include <Arduino.h>
 
-#include "credentials.h" // set const char *ssid and const char *password in include/credentials.h
+#include "credentials.h" // set const char *wifi_ssid and const char *wifi_password in include/credentials.h
 #include <ESP8266WiFi.h>
 #include <WiFiClient.h>
 #include <ESPAsyncTCP.h>
@@ -356,7 +356,7 @@ void handle_RF_command() {
   }
 }
 
- 
+
 void handle_presence_detection() {
   // We check for a phone by pinging its IP address at regular intervals.
   // If the phone is HERE we assume its owner is here.
@@ -413,7 +413,7 @@ void handle_presence_detection() {
         door_opened_while_away = false; // clear flag, so multiple entries can be logged while away.
         DEBUG_PRINTLN("pd: DOOR OPENED WHILE AWAY");
         write_log("pd: DOOR OPENED WHILE AWAY");
-        //smtp_notify(smtp_host, smtp_port, author_email, author_password, recipient_email, "pd: DOOR OPENED WHILE AWAY");
+        //smtp_notify(smtp_host, smtp_port, smtp_author_email, smtp_author_password, recipient_email, "pd: DOOR OPENED WHILE AWAY");
         smtp_notify("pd: DOOR OPENED WHILE AWAY");
       }
     }
@@ -569,24 +569,6 @@ void handle_group_power_command() {
   }
 }
 
-// the normal mode of operation is for the client's browser to query all of the devices
-// however the TV's web sever does set CORS in the header so the browser blocks the result of the device-info query
-// as a workaround we use our SmartHomeControl device to make the query for us, since it does not respect CORS
-//void get_tv_state() {
-//  if (flag_get_tv_state) {
-//    // when TV server is offline GET takes too long to timeout, so use ping to check if the server is online before attempting GET
-//    if (Ping.ping(tv_ip, 1)) {
-//      ahClient.init("GET", "http://192.168.1.65:8060/query/device-info", &cb_tv_query_data, &cb_tv_query_offline);
-//      ahClient.send();
-//      // callback will set tv_state
-//    }
-//    else {
-//      tv_state = false;
-//    }
-//    flag_get_tv_state = false;
-//  }
-//}
-
 
 void get_tv_state() {
   const uint32_t interval = 2000; 
@@ -619,7 +601,6 @@ void write_log(String data) {
       LittleFS.rename("/access_logC.txt", "/access_logP.txt");
     }
   }
-  
 
   f = LittleFS.open("/access_logC.txt", "a");
   if (f) {
@@ -645,13 +626,13 @@ void write_log(String data) {
 // need to look into certs as related to SMTP
 // const char rootCACert[] PROGMEM = "-----BEGIN CERTIFICATE-----\n"
 //                                   "-----END CERTIFICATE-----\n";
-//void smtp_notify(const char* smtp_host, const int smtp_port, const char* author_email, const char* author_password, const char* recipient_email, const char* body) {
+//void smtp_notify(const char* smtp_host, const int smtp_port, const char* smtp_author_email, const char* smtp_author_password, const char* recipient_email, const char* body) {
 void smtp_notify(const char* body) {
   Session_Config config;
   config.server.host_name = smtp_host;
   config.server.port = smtp_port;
-  config.login.email = author_email;
-  config.login.password = author_password;
+  config.login.email = smtp_author_email;
+  config.login.password = smtp_author_password;
   config.login.user_domain = F("127.0.0.1");
 
   //If non-secure port is prefered (not allow SSL and TLS connection), use
@@ -667,16 +648,16 @@ void smtp_notify(const char* body) {
 
   SMTP_Message message;
   message.sender.name = F("SmartHome Notifier");
-  message.sender.email = author_email;
+  message.sender.email = smtp_author_email;
 
   message.subject = F("SmartHome Notification");
-  message.addRecipient(F("User"), recipient_email);
+  message.addRecipient(F("User"), smtp_recipient_email);
 
   message.text.content = body;
   message.text.charSet = F("us-ascii");
   message.text.transfer_encoding = Content_Transfer_Encoding::enc_7bit;
   message.priority = esp_mail_smtp_priority::esp_mail_smtp_priority_normal;
-  message.addHeader(message_id);
+  message.addHeader(smtp_message_id);
 
   //smtp.setSystemTime(1693876380, 16);
   //time is set else using the time library's configTime()
@@ -1404,9 +1385,9 @@ void setup() {
     Serial.println("WiFi config failed.");
   }
 
-  if (WiFi.SSID() != ssid) {
+  if (WiFi.SSID() != wifi_ssid) {
     WiFi.mode(WIFI_STA);
-    WiFi.begin(ssid, password);
+    WiFi.begin(wifi_ssid, wifi_password);
     WiFi.persistent(true);
     WiFi.setAutoConnect(true);
     WiFi.setAutoReconnect(true);
@@ -1415,7 +1396,7 @@ void setup() {
   if (WiFi.waitForConnectResult() != WL_CONNECTED) {
     Serial.println(F("Connection Failed!"));
 
-    WiFi.begin(ssid, password);
+    WiFi.begin(wifi_ssid, wifi_password);
     Serial.println(F(""));
     Serial.print(F("WiFi connecting"));
     while (WiFi.status() != WL_CONNECTED) {
