@@ -218,667 +218,427 @@ void ping_initiate(void);
 
 
 void handle_clock() {
-	static uint16_t interval = PERIOD;
-	static uint32_t pm = millis(); // previous millis
-	uint32_t dt = 0;
+  static uint16_t interval = PERIOD;
+  static uint32_t pm = millis(); // previous millis
+  uint32_t dt = 0;
 
-	uint8_t hi = 0;
-	uint8_t mi = 0;
+  uint8_t hi = 0;
+  uint8_t mi = 0;
 
-	uint8_t br = 255;
-	uint8_t bg = 255;
+  uint8_t br = 255;
+  uint8_t bg = 255;
 
-	//calling update_time() based on a flag allows async function to exit quicker and creates some consistency
-	if (time_update_needed) {
-		update_time(2);
-	}
+  //calling update_time() based on a flag allows async function to exit quicker and creates some consistency
+  if (time_update_needed) {
+    update_time(2);
+  }
 
-	if (set_sleep_time_flag) {
-		set_sleep_time_flag = false;
-		set_sleep_time();
-	}
+  if (set_sleep_time_flag) {
+    set_sleep_time_flag = false;
+    set_sleep_time();
+  }
 
-	dt = millis() - pm; // even when millis() overflows this still gives the correct time elapsed
-	if (dt >= interval) {
-		pm = millis();
-		interval = PERIOD - (dt - interval);
-		if (interval > PERIOD) {
-			interval = PERIOD; // prevent underflow
-		}
-		tic++;
+  dt = millis() - pm; // even when millis() overflows this still gives the correct time elapsed
+  if (dt >= interval) {
+    pm = millis();
+    interval = PERIOD - (dt - interval);
+    if (interval > PERIOD) {
+      interval = PERIOD; // prevent underflow
+    }
+    tic++;
 
-		if (clock_running) {
-			// every 60 seconds call update_time()
-			if (tic >= (60 * TICS_PER_SEC)) {
-				// tic gets synced to seconds when update_time() succeeds but if update_time() fails tic will keep meeting the if condition
-				// therefore we should reset tic here to prevent this block from running repeatedly
-				tic = 0;
-				update_time(2);
+    if (clock_running) {
+      // every 60 seconds call update_time()
+      if (tic >= (60 * TICS_PER_SEC)) {
+        // tic gets synced to seconds when update_time() succeeds but if update_time() fails tic will keep meeting the if condition
+        // therefore we should reset tic here to prevent this block from running repeatedly
+        tic = 0;
+        update_time(2);
 
-				// turn off clock display at midnight
-				if (local_now->tm_hour == 0 && local_now->tm_min == 0) {
-					clock_running = false;
-					set_sleep_time();
-				}
-			}
+        // turn off clock display at midnight
+        if (local_now->tm_hour == 0 && local_now->tm_min == 0) {
+          clock_running = false;
+          set_sleep_time();
+        }
+      }
 
-			mi = ((local_now->tm_min / 5) + OFFSET) % NUM_LEDS;
-			hi = (local_now->tm_hour + OFFSET) % NUM_LEDS;
+      mi = ((local_now->tm_min / 5) + OFFSET) % NUM_LEDS;
+      hi = (local_now->tm_hour + OFFSET) % NUM_LEDS;
 
-			if (BREATH) {
-				br = ((max_brightness - min_brightness) * abs((int8_t)(tic % TICS_PER_SEC) - (TICS_PER_SEC / 2))) / (TICS_PER_SEC / 2) + min_brightness;
-				bg = (((80 * (uint16_t)max_brightness) / 100 - min_brightness) * abs((int8_t)(tic % TICS_PER_SEC) - (TICS_PER_SEC / 2))) / (TICS_PER_SEC / 2) + min_brightness;
-			}
-			else {
-				if ((tic % TICS_PER_SEC) < (TICS_PER_SEC / 2)) {
-					br = max_brightness;
-					bg = (90 * (uint16_t)max_brightness) / 100;
-				}
-				else {
-					br = 0;
-					bg = 0;
-				}
-			}
+      if (BREATH) {
+        br = ((max_brightness - min_brightness) * abs((int8_t)(tic % TICS_PER_SEC) - (TICS_PER_SEC / 2))) / (TICS_PER_SEC / 2) + min_brightness;
+        bg = (((80 * (uint16_t)max_brightness) / 100 - min_brightness) * abs((int8_t)(tic % TICS_PER_SEC) - (TICS_PER_SEC / 2))) / (TICS_PER_SEC / 2) + min_brightness;
+      }
+      else {
+        if ((tic % TICS_PER_SEC) < (TICS_PER_SEC / 2)) {
+          br = max_brightness;
+          bg = (90 * (uint16_t)max_brightness) / 100;
+        }
+        else {
+          br = 0;
+          bg = 0;
+        }
+      }
 
-			FastLED.clear();
-			for (uint8_t i = 0; i < NUM_LEDS; i++) {
-				// set 6, 9, 12, and 3 o'clock positions to white to act as a reference for reading the time in the dark
-				// except when the minute hand is in that position to prevent its color mixing with white
-				if ((i == 0 || i == 3 || i == 6 || i == 9) && (i != mi)) {
-					leds[i] = CHSV(0, 0, max_brightness / 3);
-				}
-			}
+      FastLED.clear();
+      for (uint8_t i = 0; i < NUM_LEDS; i++) {
+        // set 6, 9, 12, and 3 o'clock positions to white to act as a reference for reading the time in the dark
+        // except when the minute hand is in that position to prevent its color mixing with white
+        if ((i == 0 || i == 3 || i == 6 || i == 9) && (i != mi)) {
+          leds[i] = CHSV(0, 0, max_brightness / 3);
+        }
+      }
 
-			leds[hi] = CHSV(HUE_RED, 255, br);
+      leds[hi] = CHSV(HUE_RED, 255, br);
 
-			//use += so the color of the hour hand mixes with the minute hand
-			leds[mi] += CHSV(HUE_GREEN, 255, bg);
+      //use += so the color of the hour hand mixes with the minute hand
+      leds[mi] += CHSV(HUE_GREEN, 255, bg);
 
-			show_leds();
-		}
-		else {
-			if (tic >= num_tics_to_wakeup) {
-				//tic = 0; //what if update_time() fails?
-				clock_running = true;
-				time_update_needed = true;
-			}
-			FastLED.clear();
-			show_leds();
-		}
-	}
+      show_leds();
+    }
+    else {
+      if (tic >= num_tics_to_wakeup) {
+        //tic = 0; //what if update_time() fails?
+        clock_running = true;
+        time_update_needed = true;
+      }
+      FastLED.clear();
+      show_leds();
+    }
+  }
 }
 
 void handle_RF_command() {
-	static int last_good_value = 0;
-	static uint32_t pm = millis(); // previous millis
-	uint32_t dt = 0;
+  static int last_good_value = 0;
+  static uint32_t pm = millis(); // previous millis
+  uint32_t dt = 0;
 
-	if (rf_switch.available()) {
-		int value = rf_switch.getReceivedValue();
+  if (rf_switch.available()) {
+    int value = rf_switch.getReceivedValue();
 
-		dt = millis() - pm;
-		// compare to previous value to prevent repeats, override repeat check if enough time has passed
-		if (value != last_good_value || dt >= 1500) {
-			pm = millis();
+    dt = millis() - pm;
+    // compare to previous value to prevent repeats, override repeat check if enough time has passed
+    if (value != last_good_value || dt >= 1500) {
+      pm = millis();
 
-			switch (value) {
-			case 6902449: //left button
-				last_good_value = value;
-				http_cmnd("http://192.168.1.50/cm?cmnd=POWER%20TOGGLE"); //kitchen
-				break;
-			case 6902456: //middle button
-				last_good_value = value;
-				//http_cmnd("http://192.168.1.51/cm?cmnd=POWER%20TOGGLE"); //hallway
-				//http_cmnd("http://192.168.1.62/cm?cmnd=POWER%20TOGGLE"); //dining
-				//http_cmnd("http://192.168.1.61/cm?cmnd=POWER%20TOGGLE"); //den
-				http_cmnd("http://192.168.1.66/cm?cmnd=POWER%20TOGGLE"); //lamp
-				break;
-			case 6902450: //right button
-				last_good_value = value;
-				group_power_flag = 1;
-				group_power_states[group_power_flag] = !group_power_states[group_power_flag];
-				break;
-			case 15723561: //front door - Sonoff DW1
-				last_good_value = value;
-				pd_trigger = PD_Triggers::DOOR;
-				DEBUG_CONSOLE.print("DOOR: ");
-				DEBUG_CONSOLE.println(value);
-				break;
-			case 0:
-				break;
-			default:
-				DEBUG_CONSOLE.print("unknown RF: ");
-				DEBUG_CONSOLE.println(value);
-				break;
-			}
-		}
-		rf_switch.resetAvailable();
-	}
+      switch (value) {
+      case 6902449: //left button
+        last_good_value = value;
+        http_cmnd("http://192.168.1.50/cm?cmnd=POWER%20TOGGLE"); //kitchen
+        break;
+      case 6902456: //middle button
+        last_good_value = value;
+        //http_cmnd("http://192.168.1.51/cm?cmnd=POWER%20TOGGLE"); //hallway
+        //http_cmnd("http://192.168.1.62/cm?cmnd=POWER%20TOGGLE"); //dining
+        //http_cmnd("http://192.168.1.61/cm?cmnd=POWER%20TOGGLE"); //den
+        http_cmnd("http://192.168.1.66/cm?cmnd=POWER%20TOGGLE"); //lamp
+        break;
+      case 6902450: //right button
+        last_good_value = value;
+        group_power_flag = 1;
+        group_power_states[group_power_flag] = !group_power_states[group_power_flag];
+        break;
+      case 15723561: //front door - Sonoff DW1
+        last_good_value = value;
+        pd_trigger = PD_Triggers::DOOR;
+        DEBUG_CONSOLE.print("DOOR: ");
+        DEBUG_CONSOLE.println(value);
+        break;
+      case 0:
+        break;
+      default:
+        DEBUG_CONSOLE.print("unknown RF: ");
+        DEBUG_CONSOLE.println(value);
+        break;
+      }
+    }
+    rf_switch.resetAvailable();
+  }
 }
 
-
-/*
-void handle_presence_detection_OLD() {
-	// We check for a phone by pinging its IP address at regular intervals (TIMER trigger).
-	// If the phone is HERE we assume its owner is here.
-	// We do not ping for the phone right when the door is opened because pinging can be slow and the phone may not be connected to WiFi yet.
-	// Since we cannot rely on pinging to always give an immediate, correct phone state, we have to work with stale data, which makes the code tricky.
-
-	//enum class PhoneStates {HERE, AWAY};
-	static enum PhoneStates previous_phone_state = PhoneStates::AWAY;
-	static enum PhoneStates phone_state = PhoneStates::AWAY;
-
-	static bool door_opened_while_away = false;
-	static bool enable_welcome_light = false;
-
-	static uint32_t t1_interval = 0; // default to zero so check for phone happens on first call
-	static uint32_t t1_pm = millis(); // timer 1 previous millis
-	//static uint32_t t2_pm = millis();
-	static uint32_t door_opened_pm = 0;
-	static bool enable_away_power_off = false;
-	uint32_t dt = 0;
-
-	dt = millis() - t1_pm; // even when millis() overflows this still gives the correct time elapsed
-	if (pd_trigger == PD_Triggers::NONE && dt >= t1_interval) {
-		// normally we check every PD_Phone_Check_Interval but if the DOOR is opened we override the normal check cycle
-		t1_pm = millis();
-		t1_interval = PD_Phone_Check_Interval;
-		pd_trigger = PD_Triggers::TIMER;
-	}
-
-	dt = millis() - door_opened_pm;
-	if (enable_away_power_off && dt >= PD_On_Away_Power_Off_Delay) {
-		enable_away_power_off = false;
-		door_opened_pm = 0;
-		//http_cmnd("http://192.168.1.50/cm?cmnd=POWER%20OFF"); //kitchen. for testing.
-
-		phone_state = check_for_phone();
-		if (phone_state == PhoneStates::AWAY) {
-			char buf[] = "Group0 OFF"; //everything off
-			process_cmnd(buf);
-			DEBUG_PRINTLN("pd: away power off");
-			write_log("pd: away power off");
-		}
-	}
-
-	if (pd_trigger == PD_Triggers::TIMER) {
-		previous_phone_state = phone_state;
-		phone_state = check_for_phone();
-		if (phone_state == PhoneStates::AWAY) {
-			enable_welcome_light = true;
-
-			// phone was here but now away so turn everything off.
-			// checking previous state ensures everything is only turned off once.
-			if (previous_phone_state == PhoneStates::HERE) {
-				// it is possible to miss a door open trigger
-				// if that happens set door_opened_pm to current millis()
-				if (door_opened_pm == 0) {
-					door_opened_pm = millis();
-				}
-				enable_away_power_off = true;
-				DEBUG_PRINTLN("pd: away");
-				write_log("pd: away");
-			}
-
-			if (door_opened_while_away) {
-				door_opened_while_away = false; // clear flag, so multiple entries can be logged while away.
-				DEBUG_PRINTLN("pd: DOOR OPENED WHILE AWAY");
-				write_log("pd: DOOR OPENED WHILE AWAY");
-				smtp_notify(smtp_host, smtp_port, author_email, author_password, recipient_email, "pd: DOOR OPENED WHILE AWAY");
-
-			}
-		}
-		else if (phone_state == PhoneStates::HERE) {
-			door_opened_while_away = false;
-			if (previous_phone_state == PhoneStates::AWAY) {
-				// cannot do much here because we cannot be certain if phone was detected as HERE before entering (triggering DOOR)
-				DEBUG_PRINTLN("pd: here");
-				write_log("pd: here");
-			}
-			else {
-				enable_welcome_light = false;
-				enable_away_power_off = false;
-			}
-		}
-	}
-	else if (pd_trigger == PD_Triggers::DOOR) {
-		door_opened_pm = millis();
-
-		// door was opened so check for phone using a TIMER trigger after PD_WiFi_Connect_Delay.
-		// the delay gives time for phone to connect/drop WiFi (arriving/leaving).
-		// if the delay is not long enough false DOOR OPENED WHILE AWAY messages will be logged
-		t1_pm = millis();
-		t1_interval = PD_WiFi_Connect_Delay;
-
-		// cannot use (phone_state == PhoneStates::AWAY) reliably to detect entering because the phone may have been detected before entering
-		if (enable_welcome_light) {
-			enable_welcome_light = false;
-			http_cmnd("http://192.168.1.50/cm?cmnd=POWER%20ON"); //kitchen
-			http_cmnd("http://192.168.1.66/cm?cmnd=POWER%20ON"); //lamp
-			http_cmnd("http://192.168.1.64/cm?cmnd=POWER%20ON"); //raspberry pi outlet
-
-
-			//process_cmnd("POWERCLOCK ON"); //compiles but does not execute. process_cmnd manipulates buf in place so it cannot be used on a constant string
-			char buf[] = "POWERCLOCK ON";
-			process_cmnd(buf);
-		}
-
-		if (phone_state == PhoneStates::AWAY) {
-			// this will only log a warning message if phone is not detected as HERE the next time it is pinged
-			door_opened_while_away = true;
-		}
-
-		DEBUG_PRINTLN("pd: door opened");
-		write_log("pd: door opened");
-		//http_cmnd("http://192.168.1.50/cm?cmnd=POWER%20TOGGLE"); //for testing
-	}
-
-	pd_trigger = PD_Triggers::NONE;
-}
-*/
-
-/*
-void handle_presence_detection_WORKS() {
-	// We check for a phone by pinging its IP address at regular intervals (TIMER trigger).
-	// If the phone is HERE we assume its owner is here.
-	// We do not ping for the phone right when the door is opened because pinging can be slow and the phone may not be connected to WiFi yet.
-	// Since we cannot rely on pinging to always give an immediate, correct phone state, we have to work with stale data, which makes the code tricky.
-
-	static bool door_opened_while_away = false;
-	static bool enable_welcome_light = false;
-
-	static uint32_t t1_interval = 0; // default to zero so check for phone happens on first call
-	static uint32_t t1_pm = millis(); // timer 1 previous millis
-	//static uint32_t t2_pm = millis();
-	static uint32_t door_opened_pm = 0;
-	static bool enable_away_power_off = false;
-	uint32_t dt = 0;
-
-
-	dt = millis() - t1_pm; // even when millis() overflows this still gives the correct time elapsed
-	//if (dt >= t1_interval) {
-	if (pd_trigger == PD_Triggers::NONE && dt >= t1_interval) {
-		t1_pm = millis();
-		// if the DOOR is opened t1_interval was shortened, so need to restore t1_interval in case it was changed
-		t1_interval = PD_Phone_Check_Interval;
-		//pd_trigger = PD_Triggers::TIMER;
-
-		// try to ping up to 5 times with a timeout of 1 second.
-		// if a response is received any pings requests remaining in the queue will be canceled
-		// trying up to 5 times assures the phone is actually not here instead of a ping being missed
-		PingPhone.begin(phone_ip, 5, 1000);
-	}
-
-	dt = millis() - door_opened_pm;
-	if (enable_away_power_off && dt >= PD_On_Away_Power_Off_Delay) {
-		enable_away_power_off = false;
-		door_opened_pm = 0;
-		//http_cmnd("http://192.168.1.50/cm?cmnd=POWER%20OFF"); //kitchen. for testing.
-
-		//phone_state = check_for_phone();
-		if (phone_state == PhoneStates::AWAY) {
-			char buf[] = "Group0 OFF"; //everything off
-			process_cmnd(buf);
-			DEBUG_PRINTLN("pd: away power off");
-			write_log("pd: away power off");
-		}
-	}
-
-	if (pd_trigger == PD_Triggers::PHONE) {
-		if (phone_state == PhoneStates::AWAY) {
-			enable_welcome_light = true;
-
-			// phone was here but now away so turn everything off.
-			// checking previous state ensures everything is only turned off once.
-			if (previous_phone_state == PhoneStates::HERE) {
-				// it is possible to miss a door open trigger
-				// if that happens set door_opened_pm to current millis()
-				if (door_opened_pm == 0) {
-					door_opened_pm = millis();
-				}
-				enable_away_power_off = true;
-				DEBUG_PRINTLN("pd: away");
-				write_log("pd: away");
-			}
-
-			if (door_opened_while_away) {
-				door_opened_while_away = false; // clear flag, so multiple entries can be logged while away.
-				DEBUG_PRINTLN("pd: DOOR OPENED WHILE AWAY");
-				write_log("pd: DOOR OPENED WHILE AWAY");
-				smtp_notify("pd: DOOR OPENED WHILE AWAY");
-			}
-		}
-		else if (phone_state == PhoneStates::HERE) {
-			door_opened_while_away = false;
-			if (previous_phone_state == PhoneStates::AWAY) {
-				// cannot do much here because we cannot be certain if phone was detected as HERE before entering (triggering DOOR)
-				DEBUG_PRINTLN("pd: here");
-				write_log("pd: here");
-			}
-			else {
-				enable_welcome_light = false;
-				enable_away_power_off = false;
-			}
-		}
-	}
-	else if (pd_trigger == PD_Triggers::DOOR) {
-		door_opened_pm = millis();
-
-		// door was opened so check for phone using a TIMER trigger after PD_WiFi_Connect_Delay.
-		// the delay gives time for phone to connect/drop WiFi (arriving/leaving).
-		// if the delay is not long enough false DOOR OPENED WHILE AWAY messages will be logged
-		t1_pm = millis();
-		t1_interval = PD_WiFi_Connect_Delay;
-
-		// cannot use (phone_state == PhoneStates::AWAY) reliably to detect entering because the phone may have been detected before entering
-		if (enable_welcome_light) {
-			enable_welcome_light = false;
-			http_cmnd("http://192.168.1.50/cm?cmnd=POWER%20ON"); //kitchen
-			http_cmnd("http://192.168.1.66/cm?cmnd=POWER%20ON"); //lamp
-			http_cmnd("http://192.168.1.64/cm?cmnd=POWER%20ON"); //raspberry pi outlet
-
-
-			//process_cmnd("POWERCLOCK ON"); //compiles but does not execute. process_cmnd manipulates buf in place so it cannot be used on a constant string
-			char buf[] = "POWERCLOCK ON";
-			process_cmnd(buf);
-		}
-
-		if (phone_state == PhoneStates::AWAY) {
-			// this will only log a warning message if phone is not detected as HERE the next time it is pinged
-			door_opened_while_away = true;
-		}
-
-		DEBUG_PRINTLN("pd: door opened");
-		write_log("pd: door opened");
-		//http_cmnd("http://192.168.1.50/cm?cmnd=POWER%20TOGGLE"); //for testing
-	}
-
-	pd_trigger = PD_Triggers::NONE;
-}
-*/
  
 void handle_presence_detection() {
-	// We check for a phone by pinging its IP address at regular intervals.
-	// If the phone is HERE we assume its owner is here.
-	// We do not ping for the phone right when the door is opened because pinging can be slow and the phone may not be connected to WiFi yet.
-	// Since we cannot rely on pinging to always give an immediate, correct phone state, we have to work with stale data, which makes the code tricky.
+  // We check for a phone by pinging its IP address at regular intervals.
+  // If the phone is HERE we assume its owner is here.
+  // We do not ping for the phone right when the door is opened because pinging can be slow and the phone may not be connected to WiFi yet.
+  // Since we cannot rely on pinging to always give an immediate, correct phone state, we have to work with stale data, which makes the code tricky.
 
-	static bool door_opened_while_away = false;
-	static bool enable_welcome_light = false;
+  static bool door_opened_while_away = false;
+  static bool enable_welcome_light = false;
 
-	static uint32_t interval = 0; // default to zero so check for phone happens on first call
-	static uint32_t pm = millis(); // previous millis
-	static bool enable_away_power_off = false;
-	uint32_t dt = 0;
-
-
-	dt = millis() - pm; // even when millis() overflows this still gives the correct time elapsed
-	if (pd_trigger == PD_Triggers::NONE && dt >= interval) {
-		pm = millis();
-		// if the DOOR is opened interval was shortened, so need to restore interval in case it was changed
-		interval = PD_Phone_Check_Interval;
-
-		// try to ping up to 5 times with a timeout of 1 second.
-		// if a response is received any pings requests remaining in the queue will be cancelled
-		// trying up to 5 times assures the phone is actually not here instead of a ping being missed
-		PingPhone.begin(phone_ip, NUM_PINGS, PING_TIMEOUT);
-	}
+  static uint32_t interval = 0; // default to zero so check for phone happens on first call
+  static uint32_t pm = millis(); // previous millis
+  static bool enable_away_power_off = false;
+  uint32_t dt = 0;
 
 
-	if (pd_trigger == PD_Triggers::PHONE) {
-		if (phone_state == PhoneStates::AWAY) {
-			enable_welcome_light = true;
+  dt = millis() - pm; // even when millis() overflows this still gives the correct time elapsed
+  if (pd_trigger == PD_Triggers::NONE && dt >= interval) {
+    pm = millis();
+    // if the DOOR is opened interval was shortened, so need to restore interval in case it was changed
+    interval = PD_Phone_Check_Interval;
 
-			if (previous_phone_state == PhoneStates::HERE) {
-				// phone was HERE but now AWAY so allow power off and start power off timer
-				// checking previous state ensures everything is only turned off once.
-				enable_away_power_off = true;
-				pm = millis();
-				interval = PD_On_Away_Power_Off_Delay;
-				DEBUG_PRINTLN("pd: away");
-				write_log("pd: away");
-			}
-			else if (previous_phone_state == PhoneStates::AWAY) {
-				// phone was found to be AWAY twice so assume it is not returning soon and power everything off
-				if (enable_away_power_off) {
-					enable_away_power_off = false;
-					char buf[] = "Group0 OFF"; //everything off
-					process_cmnd(buf);
-					DEBUG_PRINTLN("pd: away power off");
-					write_log("pd: away power off");
-				}
-			}
+    // try to ping up to 5 times with a timeout of 1 second.
+    // if a response is received any pings requests remaining in the queue will be cancelled
+    // trying up to 5 times assures the phone is actually not here instead of a ping being missed
+    PingPhone.begin(phone_ip, NUM_PINGS, PING_TIMEOUT);
+  }
 
-			if (door_opened_while_away) {
-				door_opened_while_away = false; // clear flag, so multiple entries can be logged while away.
-				DEBUG_PRINTLN("pd: DOOR OPENED WHILE AWAY");
-				write_log("pd: DOOR OPENED WHILE AWAY");
-				//smtp_notify(smtp_host, smtp_port, author_email, author_password, recipient_email, "pd: DOOR OPENED WHILE AWAY");
-				smtp_notify("pd: DOOR OPENED WHILE AWAY");
-			}
-		}
-		else if (phone_state == PhoneStates::HERE) {
-			door_opened_while_away = false;
 
-			if (previous_phone_state == PhoneStates::AWAY) {
-				// cannot do much here because we cannot be certain if phone was detected as HERE before entering (triggering DOOR)
-				DEBUG_PRINTLN("pd: here");
-				write_log("pd: here");
-			}
-			else if (previous_phone_state == PhoneStates::HERE) {
-				enable_welcome_light = false;
-				enable_away_power_off = false;
-			}
-		}
-	}
-	else if (pd_trigger == PD_Triggers::DOOR) {
-		// door was opened so check for phone after PD_WiFi_Connect_Delay.
-		// the delay gives time for phone to connect/drop WiFi (arriving/leaving).
-		// if the delay is not long enough false DOOR OPENED WHILE AWAY messages will be logged
-		pm = millis();
-		interval = PD_WiFi_Connect_Delay;
+  if (pd_trigger == PD_Triggers::PHONE) {
+    if (phone_state == PhoneStates::AWAY) {
+      enable_welcome_light = true;
 
-		// cannot use (phone_state == PhoneStates::AWAY) reliably to detect entering because the phone may have been detected before entering
-		if (enable_welcome_light) {
-			enable_welcome_light = false;
-			http_cmnd("http://192.168.1.50/cm?cmnd=POWER%20ON"); //kitchen
-			http_cmnd("http://192.168.1.66/cm?cmnd=POWER%20ON"); //lamp
-			//http_cmnd("http://192.168.1.64/cm?cmnd=POWER%20ON"); //raspberry pi outlet
+      if (previous_phone_state == PhoneStates::HERE) {
+        // phone was HERE but now AWAY so allow power off and start power off timer
+        // checking previous state ensures everything is only turned off once.
+        enable_away_power_off = true;
+        pm = millis();
+        interval = PD_On_Away_Power_Off_Delay;
+        DEBUG_PRINTLN("pd: away");
+        write_log("pd: away");
+      }
+      else if (previous_phone_state == PhoneStates::AWAY) {
+        // phone was found to be AWAY twice so assume it is not returning soon and power everything off
+        if (enable_away_power_off) {
+          enable_away_power_off = false;
+          char buf[] = "Group0 OFF"; //everything off
+          process_cmnd(buf);
+          DEBUG_PRINTLN("pd: away power off");
+          write_log("pd: away power off");
+        }
+      }
 
-			//process_cmnd("POWERCLOCK ON"); //compiles but does not execute. process_cmnd manipulates buf in place so it cannot be used on a constant string
-			char buf[] = "POWERCLOCK ON";
-			process_cmnd(buf);
-		}
+      if (door_opened_while_away) {
+        door_opened_while_away = false; // clear flag, so multiple entries can be logged while away.
+        DEBUG_PRINTLN("pd: DOOR OPENED WHILE AWAY");
+        write_log("pd: DOOR OPENED WHILE AWAY");
+        //smtp_notify(smtp_host, smtp_port, author_email, author_password, recipient_email, "pd: DOOR OPENED WHILE AWAY");
+        smtp_notify("pd: DOOR OPENED WHILE AWAY");
+      }
+    }
+    else if (phone_state == PhoneStates::HERE) {
+      door_opened_while_away = false;
 
-		if (phone_state == PhoneStates::AWAY) {
-			// this will only log a warning message if phone is not detected as HERE the next time it is pinged
-			door_opened_while_away = true;
-		}
+      if (previous_phone_state == PhoneStates::AWAY) {
+        // cannot do much here because we cannot be certain if phone was detected as HERE before entering (triggering DOOR)
+        DEBUG_PRINTLN("pd: here");
+        write_log("pd: here");
+      }
+      else if (previous_phone_state == PhoneStates::HERE) {
+        enable_welcome_light = false;
+        enable_away_power_off = false;
+      }
+    }
+  }
+  else if (pd_trigger == PD_Triggers::DOOR) {
+    // door was opened so check for phone after PD_WiFi_Connect_Delay.
+    // the delay gives time for phone to connect/drop WiFi (arriving/leaving).
+    // if the delay is not long enough false DOOR OPENED WHILE AWAY messages will be logged
+    pm = millis();
+    interval = PD_WiFi_Connect_Delay;
 
-		DEBUG_PRINTLN("pd: door opened");
-		write_log("pd: door opened");
-		//http_cmnd("http://192.168.1.50/cm?cmnd=POWER%20TOGGLE"); //for testing
-	}
+    // cannot use (phone_state == PhoneStates::AWAY) reliably to detect entering because the phone may have been detected before entering
+    if (enable_welcome_light) {
+      enable_welcome_light = false;
+      http_cmnd("http://192.168.1.50/cm?cmnd=POWER%20ON"); //kitchen
+      http_cmnd("http://192.168.1.66/cm?cmnd=POWER%20ON"); //lamp
+      //http_cmnd("http://192.168.1.64/cm?cmnd=POWER%20ON"); //raspberry pi outlet
 
-	pd_trigger = PD_Triggers::NONE;
+      //process_cmnd("POWERCLOCK ON"); //compiles but does not execute. process_cmnd manipulates buf in place so it cannot be used on a constant string
+      char buf[] = "POWERCLOCK ON";
+      process_cmnd(buf);
+    }
+
+    if (phone_state == PhoneStates::AWAY) {
+      // this will only log a warning message if phone is not detected as HERE the next time it is pinged
+      door_opened_while_away = true;
+    }
+
+    DEBUG_PRINTLN("pd: door opened");
+    write_log("pd: door opened");
+    //http_cmnd("http://192.168.1.50/cm?cmnd=POWER%20TOGGLE"); //for testing
+  }
+
+  pd_trigger = PD_Triggers::NONE;
 }
 
 
 void handle_smart_speaker_command() {
-	switch (sc) {
-	case SC_TV_ON:
-		ir_data = "8A"; // discrete TV Power ON
-		break;
-	case SC_TV_OFF:
-		ir_data = "18"; // discrete TV Power OFF
-		break;
-	case SC_PLAYPAUSE:
-		ir_data = "32"; // TV Play/Pause
-		break;
-	case SC_CLOCK_ON:
-		clock_running = true;
-		time_update_needed = true;
-		break;
-	case SC_CLOCK_OFF:
-		clock_running = false;
-		set_sleep_time();
-		break;
-	default:
-		break;
-	}
-	sc = SC_DO_NOTHING;
+  switch (sc) {
+  case SC_TV_ON:
+    ir_data = "8A"; // discrete TV Power ON
+    break;
+  case SC_TV_OFF:
+    ir_data = "18"; // discrete TV Power OFF
+    break;
+  case SC_PLAYPAUSE:
+    ir_data = "32"; // TV Play/Pause
+    break;
+  case SC_CLOCK_ON:
+    clock_running = true;
+    time_update_needed = true;
+    break;
+  case SC_CLOCK_OFF:
+    clock_running = false;
+    set_sleep_time();
+    break;
+  default:
+    break;
+  }
+  sc = SC_DO_NOTHING;
 }
 
 
 void handle_group_power_command() {
-	//digitalWrite(LED, digitalRead(LED) == HIGH ? LOW : HIGH);
+  //digitalWrite(LED, digitalRead(LED) == HIGH ? LOW : HIGH);
 
-	vector<string> member_states; //possible power states for a group member
-	vector<string> power_cmnds;
-	size_t pos = 0;
+  vector<string> member_states; //possible power states for a group member
+  vector<string> power_cmnds;
+  size_t pos = 0;
 
-	if (group_power_flag >= 0) {
-		char numstr[3];
-		string group_key = string("group") + itoa(group_power_flag, numstr, 10);
-		string switch_key;
-		string group_state;
-		//DEBUG_PRINTLN(key.c_str());
+  if (group_power_flag >= 0) {
+    char numstr[3];
+    string group_key = string("group") + itoa(group_power_flag, numstr, 10);
+    string switch_key;
+    string group_state;
+    //DEBUG_PRINTLN(key.c_str());
 
-		if (group_power_states[group_power_flag]) {
-			switch_key = "switch_on";
-			group_state = "on";
-		}
-		else {
-			switch_key = "switch_off";
-			group_state = "off";
-		}
+    if (group_power_states[group_power_flag]) {
+      switch_key = "switch_on";
+      group_state = "on";
+    }
+    else {
+      switch_key = "switch_off";
+      group_state = "off";
+    }
 
-		while((pos = simple_JSON_parse(smart_devices_JSON_string, group_key, pos, member_states)) != string::npos);
-		pos = 0;
-		while((pos = simple_JSON_parse(smart_devices_JSON_string, switch_key, pos, power_cmnds)) != string::npos);
-
-
-		//for debugging
-		//member_states.clear();
-		//member_states.push_back("off");
-		//member_states.push_back("off");
-		//power_cmnds.clear();
-		//power_cmnds.push_back("http://192.168.1.60/cm?cmnd=PowerClock%20OFF");
-		//power_cmnds.push_back("http://192.168.1.43/cm?cmnd=POWER1%20TOGGLE");
-		//power_cmnds.push_back("http://192.168.1.31:8089/cm?cmnd=Power%20OFF");
+    while((pos = simple_JSON_parse(smart_devices_JSON_string, group_key, pos, member_states)) != string::npos);
+    pos = 0;
+    while((pos = simple_JSON_parse(smart_devices_JSON_string, switch_key, pos, power_cmnds)) != string::npos);
 
 
-		for (unsigned int i = 0; i < power_cmnds.size(); i++) {
-			for (auto& c : member_states[i]) {
-				c = tolower(c);
-			}
-			//DEBUG_PRINTLN(member_states[i].c_str());
-			if (member_states[i].find(group_state) != string::npos) {
-				// this group member has an allowed state that matches the desired group state
-				// e.g. group member allows "off" and the desired group state is "off"
-				// if group member state was "onoff" there would also be a match
+    //for debugging
+    //member_states.clear();
+    //member_states.push_back("off");
+    //member_states.push_back("off");
+    //power_cmnds.clear();
+    //power_cmnds.push_back("http://192.168.1.60/cm?cmnd=PowerClock%20OFF");
+    //power_cmnds.push_back("http://192.168.1.43/cm?cmnd=POWER1%20TOGGLE");
+    //power_cmnds.push_back("http://192.168.1.31:8089/cm?cmnd=Power%20OFF");
 
-				if ( power_cmnds[i].find( WiFi.localIP().toString().c_str() ) == string::npos ) {
-					// address is not on this device so use http_cmnd
-					http_cmnd(power_cmnds[i].c_str());
-				}
-				else {
-					// sending web commands from device to the same device doesn't work, so execute locally
-					DEBUG_CONSOLE.println("execute locally");
-					string s = power_cmnds[i];
-					size_t start = s.find("=");
-					if (start != string::npos && start < s.length()-1 ) {
-						s = s.substr(start+1);
-						start = s.find("%20");
-						if (start != string::npos) {
-							s.replace(start, 3, " ");
-						}
-						DEBUG_CONSOLE.println(s.c_str());
 
-						char buf[s.length()+1] = "";
-						strcpy(buf, s.c_str());
-						process_cmnd(buf);
-					}
-					else {
-						DEBUG_CONSOLE.println("invalid command");
-					}
-				}
-			}
-		}
-		group_power_flag = -1;
-	}
+    for (unsigned int i = 0; i < power_cmnds.size(); i++) {
+      for (auto& c : member_states[i]) {
+        c = tolower(c);
+      }
+      //DEBUG_PRINTLN(member_states[i].c_str());
+      if (member_states[i].find(group_state) != string::npos) {
+        // this group member has an allowed state that matches the desired group state
+        // e.g. group member allows "off" and the desired group state is "off"
+        // if group member state was "onoff" there would also be a match
+
+        if ( power_cmnds[i].find( WiFi.localIP().toString().c_str() ) == string::npos ) {
+          // address is not on this device so use http_cmnd
+          http_cmnd(power_cmnds[i].c_str());
+        }
+        else {
+          // sending web commands from device to the same device doesn't work, so execute locally
+          DEBUG_CONSOLE.println("execute locally");
+          string s = power_cmnds[i];
+          size_t start = s.find("=");
+          if (start != string::npos && start < s.length()-1 ) {
+            s = s.substr(start+1);
+            start = s.find("%20");
+            if (start != string::npos) {
+              s.replace(start, 3, " ");
+            }
+            DEBUG_CONSOLE.println(s.c_str());
+
+            char buf[s.length()+1] = "";
+            strcpy(buf, s.c_str());
+            process_cmnd(buf);
+          }
+          else {
+            DEBUG_CONSOLE.println("invalid command");
+          }
+        }
+      }
+    }
+    group_power_flag = -1;
+  }
 }
 
 // the normal mode of operation is for the client's browser to query all of the devices
 // however the TV's web sever does set CORS in the header so the browser blocks the result of the device-info query
 // as a workaround we use our SmartHomeControl device to make the query for us, since it does not respect CORS
 //void get_tv_state() {
-//	if (flag_get_tv_state) {
-//		// when TV server is offline GET takes too long to timeout, so use ping to check if the server is online before attempting GET
-//		if (Ping.ping(tv_ip, 1)) {
-//			ahClient.init("GET", "http://192.168.1.65:8060/query/device-info", &cb_tv_query_data, &cb_tv_query_offline);
-//			ahClient.send();
-//			// callback will set tv_state
-//		}
-//		else {
-//			tv_state = false;
-//		}
-//		flag_get_tv_state = false;
-//	}
+//  if (flag_get_tv_state) {
+//    // when TV server is offline GET takes too long to timeout, so use ping to check if the server is online before attempting GET
+//    if (Ping.ping(tv_ip, 1)) {
+//      ahClient.init("GET", "http://192.168.1.65:8060/query/device-info", &cb_tv_query_data, &cb_tv_query_offline);
+//      ahClient.send();
+//      // callback will set tv_state
+//    }
+//    else {
+//      tv_state = false;
+//    }
+//    flag_get_tv_state = false;
+//  }
 //}
 
 
 void get_tv_state() {
-	const uint32_t interval = 2000; 
-	static uint32_t pm = millis(); // previous millis
-	uint32_t dt = 0;
+  const uint32_t interval = 2000; 
+  static uint32_t pm = millis(); // previous millis
+  uint32_t dt = 0;
 
-	//the client should limit how frequently get_tv_state() is called but let's limit it here too to be safe
-	dt = millis() - pm;
-	if (flag_get_tv_state && dt >= interval) {
-		flag_get_tv_state = false;
-		pm = millis();
-		// when TV server is offline GET takes too long to timeout, so use ping to check if the server is online before attempting GET
-		// if a ping answered then PingTV's callback will do a GET on the TV's query URL to determine the TV's state
-		PingTV.begin(tv_ip, NUM_PINGS, PING_TIMEOUT);
-	}
+  //the client should limit how frequently get_tv_state() is called but let's limit it here too to be safe
+  dt = millis() - pm;
+  if (flag_get_tv_state && dt >= interval) {
+    flag_get_tv_state = false;
+    pm = millis();
+    // when TV server is offline GET takes too long to timeout, so use ping to check if the server is online before attempting GET
+    // if a ping answered then PingTV's callback will do a GET on the TV's query URL to determine the TV's state
+    PingTV.begin(tv_ip, NUM_PINGS, PING_TIMEOUT);
+  }
 }
 
 
 void write_log(String data) {
-	File f = LittleFS.open("/access_logC.txt", "r");
-	if (f) {
-		size_t fsize = f.size();
-		f.close();
-		//if fsize is too big the access log will include garbage
-		//if (fsize > 2000) { // corruption.
-		//if (fsize > 1900) { // seems ok
-		// if full, rotate log files
-		if (fsize > 1750) { // about 100 lines, no corruption.
-			LittleFS.remove("/access_logP.txt");
-			LittleFS.rename("/access_logC.txt", "/access_logP.txt");
-		}
-	}
-	
+  File f = LittleFS.open("/access_logC.txt", "r");
+  if (f) {
+    size_t fsize = f.size();
+    f.close();
+    //if fsize is too big the access log will include garbage
+    //if (fsize > 2000) { // corruption.
+    //if (fsize > 1900) { // seems ok
+    // if full, rotate log files
+    if (fsize > 1750) { // about 100 lines, no corruption.
+      LittleFS.remove("/access_logP.txt");
+      LittleFS.rename("/access_logC.txt", "/access_logP.txt");
+    }
+  }
+  
 
-	f = LittleFS.open("/access_logC.txt", "a");
-	if (f) {
-		//time_t epochTime = timeClient.getEpochTime();
-		//struct tm *ptm = gmtime(&epochTime);
-		update_time(2);
-		char ts[23];
-		snprintf(ts, sizeof ts, "%d/%02d/%02d %02d:%02d:%02d - ", local_now->tm_year+1900, local_now->tm_mon+1, local_now->tm_mday, local_now->tm_hour, local_now->tm_min, local_now->tm_sec);
-		
-		//write_log crashes if it gets interrupted here. not sure why.
-		noInterrupts();
-		f.print(ts);
+  f = LittleFS.open("/access_logC.txt", "a");
+  if (f) {
+    //time_t epochTime = timeClient.getEpochTime();
+    //struct tm *ptm = gmtime(&epochTime);
+    update_time(2);
+    char ts[23];
+    snprintf(ts, sizeof ts, "%d/%02d/%02d %02d:%02d:%02d - ", local_now->tm_year+1900, local_now->tm_mon+1, local_now->tm_mday, local_now->tm_hour, local_now->tm_min, local_now->tm_sec);
+    
+    //write_log crashes if it gets interrupted here. not sure why.
+    noInterrupts();
+    f.print(ts);
 
-		f.print(data);
-		f.print("\n");
-		delay(1); //works without this. need it?? makes sure access time is changed??
-		f.close();
-		interrupts();
-	}
+    f.print(data);
+    f.print("\n");
+    delay(1); //works without this. need it?? makes sure access time is changed??
+    f.close();
+    interrupts();
+  }
 }
 
 
@@ -887,865 +647,854 @@ void write_log(String data) {
 //                                   "-----END CERTIFICATE-----\n";
 //void smtp_notify(const char* smtp_host, const int smtp_port, const char* author_email, const char* author_password, const char* recipient_email, const char* body) {
 void smtp_notify(const char* body) {
-	Session_Config config;
-	config.server.host_name = smtp_host;
-	config.server.port = smtp_port;
-	config.login.email = author_email;
-	config.login.password = author_password;
-	config.login.user_domain = F("127.0.0.1");
+  Session_Config config;
+  config.server.host_name = smtp_host;
+  config.server.port = smtp_port;
+  config.login.email = author_email;
+  config.login.password = author_password;
+  config.login.user_domain = F("127.0.0.1");
 
-	//If non-secure port is prefered (not allow SSL and TLS connection), use
-	//config.secure.mode = esp_mail_secure_mode_nonsecure;
+  //If non-secure port is prefered (not allow SSL and TLS connection), use
+  //config.secure.mode = esp_mail_secure_mode_nonsecure;
 
-	//If SSL and TLS are always required, use
-	//config.secure.mode = esp_mail_secure_mode_ssl_tls;
+  //If SSL and TLS are always required, use
+  //config.secure.mode = esp_mail_secure_mode_ssl_tls;
 
-	//To disable SSL permanently (use less program space), define ESP_MAIL_DISABLE_SSL in ESP_Mail_FS.h
-	//or Custom_ESP_Mail_FS.h
+  //To disable SSL permanently (use less program space), define ESP_MAIL_DISABLE_SSL in ESP_Mail_FS.h
+  //or Custom_ESP_Mail_FS.h
 
-	//config.secure.mode = esp_mail_secure_mode_nonsecure;
+  //config.secure.mode = esp_mail_secure_mode_nonsecure;
 
-	SMTP_Message message;
-	message.sender.name = F("SmartHome Notifier");
-	message.sender.email = author_email;
+  SMTP_Message message;
+  message.sender.name = F("SmartHome Notifier");
+  message.sender.email = author_email;
 
-	message.subject = F("SmartHome Notification");
-	message.addRecipient(F("User"), recipient_email);
+  message.subject = F("SmartHome Notification");
+  message.addRecipient(F("User"), recipient_email);
 
-	message.text.content = body;
-	message.text.charSet = F("us-ascii");
-	message.text.transfer_encoding = Content_Transfer_Encoding::enc_7bit;
-	message.priority = esp_mail_smtp_priority::esp_mail_smtp_priority_normal;
-	message.addHeader(message_id);
+  message.text.content = body;
+  message.text.charSet = F("us-ascii");
+  message.text.transfer_encoding = Content_Transfer_Encoding::enc_7bit;
+  message.priority = esp_mail_smtp_priority::esp_mail_smtp_priority_normal;
+  message.addHeader(message_id);
 
-	//smtp.setSystemTime(1693876380, 16);
-	//time is set else using the time library's configTime()
+  //smtp.setSystemTime(1693876380, 16);
+  //time is set else using the time library's configTime()
 
-	if (!smtp.connect(&config)) {
-		MailClient.printf("Connection error, Status Code: %d, Error Code: %d, Reason: %s", smtp.statusCode(), smtp.errorCode(), smtp.errorReason().c_str());
-	return;
-	}
+  if (!smtp.connect(&config)) {
+    MailClient.printf("Connection error, Status Code: %d, Error Code: %d, Reason: %s", smtp.statusCode(), smtp.errorCode(), smtp.errorReason().c_str());
+  return;
+  }
 
-	if (!smtp.isLoggedIn()) {
-		DEBUG_PRINTLN("\nNot yet logged in.");
-	}
-	else {
-		if (smtp.isAuthenticated()) {
-			DEBUG_PRINTLN("\nSuccessfully logged in.");
-		}
-		else {
-			DEBUG_PRINTLN("\nConnected with no Auth.");
-		}
-	}
+  if (!smtp.isLoggedIn()) {
+    DEBUG_PRINTLN("\nNot yet logged in.");
+  }
+  else {
+    if (smtp.isAuthenticated()) {
+      DEBUG_PRINTLN("\nSuccessfully logged in.");
+    }
+    else {
+      DEBUG_PRINTLN("\nConnected with no Auth.");
+    }
+  }
 
-	MailClient.sendMail(&smtp, &message);
-	smtp.sendingResult.clear();
+  MailClient.sendMail(&smtp, &message);
+  smtp.sendingResult.clear();
 }
 
 
 static void cb_tv_query_offline(void) {
-	tv_state = false;
+  tv_state = false;
 }
 
 
 static void cb_tv_query_data(void *arg, AsyncClient *c, void *data, size_t len) {
-	const uint8_t target_on_len = 7;
-	const uint8_t target_on[target_on_len] = {'P', 'o', 'w', 'e', 'r', 'O', 'n'};
-	const uint8_t target_off_len = 10;
-	const uint8_t target_off[target_off_len] = {'D', 'i', 's', 'p', 'l', 'a', 'y', 'O', 'f', 'f'};
-	static uint8_t match_score_on = 0;
-	static uint8_t match_score_off = 0;
+  const uint8_t target_on_len = 7;
+  const uint8_t target_on[target_on_len] = {'P', 'o', 'w', 'e', 'r', 'O', 'n'};
+  const uint8_t target_off_len = 10;
+  const uint8_t target_off[target_off_len] = {'D', 'i', 's', 'p', 'l', 'a', 'y', 'O', 'f', 'f'};
+  static uint8_t match_score_on = 0;
+  static uint8_t match_score_off = 0;
 
-	uint8_t *d = (uint8_t *)data;
-	for (size_t i = 0; i < len; i++) {
-		if (d[i] == target_on[match_score_on]) {
-			match_score_on++;
-		}
-		else {
-			match_score_on = 0;
-		}
+  uint8_t *d = (uint8_t *)data;
+  for (size_t i = 0; i < len; i++) {
+    if (d[i] == target_on[match_score_on]) {
+      match_score_on++;
+    }
+    else {
+      match_score_on = 0;
+    }
 
-		if (match_score_on == target_on_len) {
-			tv_state = true;
-			match_score_on = 0;
-			match_score_off = 0;
-			if (c) {
-				c->close(true);
-			}
-			return;
-		}
+    if (match_score_on == target_on_len) {
+      tv_state = true;
+      match_score_on = 0;
+      match_score_off = 0;
+      if (c) {
+        c->close(true);
+      }
+      return;
+    }
 
-		if (d[i] == target_off[match_score_off]) {
-			match_score_off++;
-		}
-		else {
-			match_score_off = 0;
-		}
+    if (d[i] == target_off[match_score_off]) {
+      match_score_off++;
+    }
+    else {
+      match_score_off = 0;
+    }
 
-		if (match_score_off == target_off_len) {
-			tv_state = false;
-			match_score_on = 0;
-			match_score_off = 0;
-			if (c) {
-				c->close(true);
-			}
-			return;
-		}
-	}
+    if (match_score_off == target_off_len) {
+      tv_state = false;
+      match_score_on = 0;
+      match_score_off = 0;
+      if (c) {
+        c->close(true);
+      }
+      return;
+    }
+  }
 }
 
 
-
-
-
-
 void transmit_IR_data() {
-	if (ir_data != "") {
-		uint32_t ulircode = strtoul(ir_data.c_str(), NULL, 16);
-		irsend.sendNEC(0x57E30000 + ((uint32_t)ulircode<<8) + ~(0xFFFFFF00 + ulircode));
-		ir_data = "";
-	}
+  if (ir_data != "") {
+    uint32_t ulircode = strtoul(ir_data.c_str(), NULL, 16);
+    irsend.sendNEC(0x57E30000 + ((uint32_t)ulircode<<8) + ~(0xFFFFFF00 + ulircode));
+    ir_data = "";
+  }
 }
 
 
 void http_cmnd(String URL) {
-	if (WiFi.status() == WL_CONNECTED) {
-		ahClient.init("GET", URL);
-		ahClient.send();
-	}
+  if (WiFi.status() == WL_CONNECTED) {
+    ahClient.init("GET", URL);
+    ahClient.send();
+  }
 }
 
 
 size_t simple_JSON_parse(string s, string key, size_t start_pos, vector<string> &output) {
-	size_t end_pos = string::npos;
+  size_t end_pos = string::npos;
 
-	size_t nls = s.find("{\"", start_pos);
-	size_t nle = s.find("\"}", start_pos)+1;
-	if (nls != string::npos && nle != string::npos) {
-		string line = s.substr(nls, nle-nls+1);
-		//Serial.println(line.c_str());
+  size_t nls = s.find("{\"", start_pos);
+  size_t nle = s.find("\"}", start_pos)+1;
+  if (nls != string::npos && nle != string::npos) {
+    string line = s.substr(nls, nle-nls+1);
+    //Serial.println(line.c_str());
 
-		size_t match_start = 0;
-		size_t match_end = 0;
-		string delimiter = "\"" + key + "\":\""; // fragile, config file can't have any space around :
+    size_t match_start = 0;
+    size_t match_end = 0;
+    string delimiter = "\"" + key + "\":\""; // fragile, config file can't have any space around :
 
-		if ((match_start = line.find(delimiter)) != string::npos) {
-			if ((match_end = line.find("\"", match_start+delimiter.length())) != string::npos) {
-				output.push_back(line.substr(match_start+delimiter.length(), match_end-(match_start+delimiter.length())));
-			}
-			else {
-				output.push_back("");
-			}
-		}
-		else {
-			output.push_back("");
-		}
-		end_pos = nle;
-	}
+    if ((match_start = line.find(delimiter)) != string::npos) {
+      if ((match_end = line.find("\"", match_start+delimiter.length())) != string::npos) {
+        output.push_back(line.substr(match_start+delimiter.length(), match_end-(match_start+delimiter.length())));
+      }
+      else {
+        output.push_back("");
+      }
+    }
+    else {
+      output.push_back("");
+    }
+    end_pos = nle;
+  }
 
-	return end_pos;
+  return end_pos;
 }
 
 
 bool update_time(int8_t num_attempts) {
-	if (num_attempts >= 0) {
-		time_t utc_now;
-		utc_now = time(nullptr);
+  if (num_attempts >= 0) {
+    time_t utc_now;
+    utc_now = time(nullptr);
 
-		// create some delay before printing
-		while (num_attempts > 0 && utc_now < RTC_UTC_TEST) {
-			delay(500);
-			time(&utc_now);
-			num_attempts--;
-		}
+    // create some delay before printing
+    while (num_attempts > 0 && utc_now < RTC_UTC_TEST) {
+      delay(500);
+      time(&utc_now);
+      num_attempts--;
+    }
 
-		if (num_attempts == 0) {
-			return false;
-		}
+    if (num_attempts == 0) {
+      return false;
+    }
 
-		local_now = localtime(&utc_now);
+    local_now = localtime(&utc_now);
 
-		//DEBUG_PRINT("ut: ");
-		//DEBUG_PRINTLN(timeClient.getFormattedTime());
-		time_update_needed = false;
-		tic = TICS_PER_SEC * local_now->tm_sec;
+    //DEBUG_PRINT("ut: ");
+    //DEBUG_PRINTLN(timeClient.getFormattedTime());
+    time_update_needed = false;
+    tic = TICS_PER_SEC * local_now->tm_sec;
 
-		if (local_now->tm_hour > 23 || local_now->tm_min > 59 || local_now->tm_sec > 59) {
-			delay(2000);
-			ESP.restart();
-		}
-	}
+    if (local_now->tm_hour > 23 || local_now->tm_min > 59 || local_now->tm_sec > 59) {
+      delay(2000);
+      ESP.restart();
+    }
+  }
 
-	return true;
+  return true;
 }
 
 
 void set_sleep_time() {
-	update_time(2);
-	tic = 0;
-	uint32_t seconds_since_midnight = 3600*local_now->tm_hour + 60*local_now->tm_min + local_now->tm_sec;
-	uint8_t day_of_the_week = local_now->tm_wday;
+  update_time(2);
+  tic = 0;
+  uint32_t seconds_since_midnight = 3600*local_now->tm_hour + 60*local_now->tm_min + local_now->tm_sec;
+  uint8_t day_of_the_week = local_now->tm_wday;
 
-	if (day_of_the_week == 1 || day_of_the_week == 2 || day_of_the_week == 3 || day_of_the_week == 4) { // Monday-Thursday
-		if (seconds_since_midnight > (uint32_t) WEEKDAY_WAKEUP_TIME) {
-			num_tics_to_wakeup = TICS_PER_SEC * (WEEKDAY_WAKEUP_TIME + 86400 - seconds_since_midnight);
-		}
-		else {
-			num_tics_to_wakeup = TICS_PER_SEC * (WEEKDAY_WAKEUP_TIME - seconds_since_midnight);
-		}
-	}
-	else if (day_of_the_week == 5) { // Friday
-		if (seconds_since_midnight > (uint32_t) WEEKDAY_WAKEUP_TIME) {
-			num_tics_to_wakeup = TICS_PER_SEC * (WEEKEND_WAKEUP_TIME + 86400 - seconds_since_midnight);
-		}
-		else {
-			num_tics_to_wakeup = TICS_PER_SEC * (WEEKDAY_WAKEUP_TIME - seconds_since_midnight);
-		}
-	}
-	else if (day_of_the_week == 6) { //Saturday
-		if (seconds_since_midnight > (uint32_t) WEEKEND_WAKEUP_TIME) {
-			num_tics_to_wakeup = TICS_PER_SEC * (WEEKEND_WAKEUP_TIME + 86400 - seconds_since_midnight);
-		}
-		else {
-			num_tics_to_wakeup = TICS_PER_SEC * (WEEKEND_WAKEUP_TIME - seconds_since_midnight);
-		}
-	}
-	else if (day_of_the_week == 0) { // Sunday
-		if (seconds_since_midnight > (uint32_t) WEEKEND_WAKEUP_TIME) {
-			num_tics_to_wakeup = TICS_PER_SEC * (WEEKDAY_WAKEUP_TIME + 86400 - seconds_since_midnight);
-		}
-		else {
-			num_tics_to_wakeup = TICS_PER_SEC * (WEEKEND_WAKEUP_TIME - seconds_since_midnight);
-		}
-	}
+  if (day_of_the_week == 1 || day_of_the_week == 2 || day_of_the_week == 3 || day_of_the_week == 4) { // Monday-Thursday
+    if (seconds_since_midnight > (uint32_t) WEEKDAY_WAKEUP_TIME) {
+      num_tics_to_wakeup = TICS_PER_SEC * (WEEKDAY_WAKEUP_TIME + 86400 - seconds_since_midnight);
+    }
+    else {
+      num_tics_to_wakeup = TICS_PER_SEC * (WEEKDAY_WAKEUP_TIME - seconds_since_midnight);
+    }
+  }
+  else if (day_of_the_week == 5) { // Friday
+    if (seconds_since_midnight > (uint32_t) WEEKDAY_WAKEUP_TIME) {
+      num_tics_to_wakeup = TICS_PER_SEC * (WEEKEND_WAKEUP_TIME + 86400 - seconds_since_midnight);
+    }
+    else {
+      num_tics_to_wakeup = TICS_PER_SEC * (WEEKDAY_WAKEUP_TIME - seconds_since_midnight);
+    }
+  }
+  else if (day_of_the_week == 6) { //Saturday
+    if (seconds_since_midnight > (uint32_t) WEEKEND_WAKEUP_TIME) {
+      num_tics_to_wakeup = TICS_PER_SEC * (WEEKEND_WAKEUP_TIME + 86400 - seconds_since_midnight);
+    }
+    else {
+      num_tics_to_wakeup = TICS_PER_SEC * (WEEKEND_WAKEUP_TIME - seconds_since_midnight);
+    }
+  }
+  else if (day_of_the_week == 0) { // Sunday
+    if (seconds_since_midnight > (uint32_t) WEEKEND_WAKEUP_TIME) {
+      num_tics_to_wakeup = TICS_PER_SEC * (WEEKDAY_WAKEUP_TIME + 86400 - seconds_since_midnight);
+    }
+    else {
+      num_tics_to_wakeup = TICS_PER_SEC * (WEEKEND_WAKEUP_TIME - seconds_since_midnight);
+    }
+  }
 }
 
 
 void show_leds() {
-		//FastLED.show() produces glitchy results so use NeoPixel Show() instead
-		RgbColor pixel;
-		for (int i = 0; i < NUM_LEDS; i++) {
-			pixel = RgbColor(leds[i].r, leds[i].g, leds[i].b);
-			strip.SetPixelColor(i, pixel);
-		}
-		strip.Show();
+    //FastLED.show() produces glitchy results so use NeoPixel Show() instead
+    RgbColor pixel;
+    for (int i = 0; i < NUM_LEDS; i++) {
+      pixel = RgbColor(leds[i].r, leds[i].g, leds[i].b);
+      strip.SetPixelColor(i, pixel);
+    }
+    strip.Show();
 }
 
 
 void handle_flash_bin(AsyncWebServerRequest *request, const String &filename, size_t index, uint8_t *data, size_t len, bool final) {
-	//ESP.wdtDisable();
+  //ESP.wdtDisable();
 
-	if (!index) {
-		size_t filesize = 0;
+  if (!index) {
+    size_t filesize = 0;
 
-		// contentLength() includes the count of bytes in bin file plus the bytes in the header and footer.
-		// these extra bytes will cause the writing of a filesystem to fail
-		// so use a separate form input on the upload page to send the actual filesize alongside the bin file
-		if (request->hasParam("filesize", true)) {
-			filesize = request->getParam("filesize", true)->value().toInt();
-		}
-		else {
-			// this doesn't work for spiffs or littlefs 
-			filesize = request->contentLength();
-		}
+    // contentLength() includes the count of bytes in bin file plus the bytes in the header and footer.
+    // these extra bytes will cause the writing of a filesystem to fail
+    // so use a separate form input on the upload page to send the actual filesize alongside the bin file
+    if (request->hasParam("filesize", true)) {
+      filesize = request->getParam("filesize", true)->value().toInt();
+    }
+    else {
+      // this doesn't work for spiffs or littlefs 
+      filesize = request->contentLength();
+    }
 
-		// if filename includes littlefs, update the file system partition
-		int cmd = (filename.indexOf("littlefs") > -1) ? U_PART : U_FLASH;
+    // if filename includes littlefs, update the file system partition
+    int cmd = (filename.indexOf("littlefs") > -1) ? U_PART : U_FLASH;
 #ifdef ESP8266
-		Update.runAsync(true);
-		if (!Update.begin(filesize, cmd)) {
+    Update.runAsync(true);
+    if (!Update.begin(filesize, cmd)) {
 #else
-		if (!Update.begin(UPDATE_SIZE_UNKNOWN, cmd)) {
+    if (!Update.begin(UPDATE_SIZE_UNKNOWN, cmd)) {
 #endif
-			Update.printError(Serial);
-		}
-	}
+      Update.printError(Serial);
+    }
+  }
 
-	if (Update.write(data, len) != len) {
-		Update.printError(Serial);
+  if (Update.write(data, len) != len) {
+    Update.printError(Serial);
 #ifdef ESP8266
-	}
-	else {
-		Serial.printf("Progress: %d%%\n", (Update.progress() * 100) / Update.size());
+  }
+  else {
+    Serial.printf("Progress: %d%%\n", (Update.progress() * 100) / Update.size());
 #endif
-	}
+  }
 
-	if (final) {
-		request->send(LittleFS, "/restart.html");
+  if (final) {
+    request->send(LittleFS, "/restart.html");
 
-		if (!Update.end(true)) {
-			Update.printError(Serial);
-		}
-		else {
-			Serial.println("Update complete");
-			//DEBUG_CONSOLE.println("Update complete");
-			Serial.flush();
-			restart_needed = true;
-		}
-	}
+    if (!Update.end(true)) {
+      Update.printError(Serial);
+    }
+    else {
+      Serial.println("Update complete");
+      //DEBUG_CONSOLE.println("Update complete");
+      Serial.flush();
+      restart_needed = true;
+    }
+  }
 }
 
 
 string process_cmnd(char buf[]) {
+  //DEBUG_PRINTLN("process_cmnd");
+  char empty[1] = "";
+  char *cmnd = NULL;
+  char *value = NULL;
+  char *up = NULL;
+  string message = "{";
 
-	//DEBUG_PRINTLN("process_cmnd");
-	char empty[1] = "";
-	char *cmnd = NULL;
-	char *value = NULL;
-	char *up = NULL;
-	string message = "{";
+  cmnd = strtok(buf, " ");
+  value = strtok(NULL, " ");
 
-	cmnd = strtok(buf, " ");
-	value = strtok(NULL, " ");
+  if (cmnd == NULL) {
+    cmnd = empty;
+    value = empty;
+  }
+  if (value == NULL) {
+    value = empty;
+  }
 
-	if (cmnd == NULL) {
-		cmnd = empty;
-		value = empty;
-	}
-	if (value == NULL) {
-		value = empty;
-	}
+  up = cmnd;
+  while (*up) {
+    *up = toupper(*up);
+    up++;
+  }
 
-	up = cmnd;
-	while (*up) {
-		*up = toupper(*up);
-		up++;
-	}
+  if (strcmp(cmnd, "CORS") != 0) {
+    up = value;
+    while (*up) {
+      *up = toupper(*up);
+      up++;
+    }
+  }
 
-	if (strcmp(cmnd, "CORS") != 0) {
-		up = value;
-		while (*up) {
-			*up = toupper(*up);
-			up++;
-		}
-	}
+  if (strcmp(cmnd, "IR") == 0) {
+    if (strcmp(value, "") != 0) {
+      ir_data = value;
+      message += "\"IR\":\"" + ir_data;
+      message += "\"}";
+    }
+    else {
+      message += "\"IR\":\"Unknown";
+      message += "\"}";
+    }
+  }
+  else if (strcmp(cmnd, "POWERTV") == 0) {
+    if (strcmp(value, "ON") == 0) {
+      ir_data = "8A";
+      message += "\"POWERTV\":\"ON";
+      message += "\"}";
+    }
+    else if (strcmp(value, "OFF") == 0) {
+      ir_data = "18";
+      message += "\"POWERTV\":\"OFF";
+      message += "\"}";
+    }
+    else {
+      flag_get_tv_state = true;
+      message += "\"POWERTV\":\"" + string((tv_state) ? "ON" : "OFF");
+      message += "\"}";
+    }
+  }
+  else if (strcmp(cmnd, "POWERCLOCK") == 0) {
+    if (strcmp(value, "ON") == 0) {
+      clock_running = true;
+      time_update_needed = true;
+    }
+    else if (strcmp(value, "OFF") == 0) {
+      clock_running = false;
+      set_sleep_time_flag = true;
+    }
+    else if (strcmp(value, "TOGGLE") == 0) {
+      clock_running = !clock_running;
+      if (clock_running) {
+        time_update_needed = true;
+      }
+      else {
+        set_sleep_time_flag = true;
+      }
+    }
+    message += "\"POWERCLOCK\":\"" + string((clock_running) ? "ON" : "OFF");
+    message += "\"}";
+  }
+  else if (strncmp(cmnd, "GROUP", 5) == 0) {
+    //group_power_flag = strtol(&cmnd[5], nullptr, 10); // more than ten (0-9) groups
+    group_power_flag = cmnd[5] - '0'; // ten (0-9) groups max
 
-	if (strcmp(cmnd, "IR") == 0) {
-		if (strcmp(value, "") != 0) {
-			ir_data = value;
-			message += "\"IR\":\"" + ir_data;
-			message += "\"}";
-		}
-		else {
-			message += "\"IR\":\"Unknown";
-			message += "\"}";
-		}
-	}
-	else if (strcmp(cmnd, "POWERTV") == 0) {
-		if (strcmp(value, "ON") == 0) {
-			ir_data = "8A";
-			message += "\"POWERTV\":\"ON";
-			message += "\"}";
-		}
-		else if (strcmp(value, "OFF") == 0) {
-			ir_data = "18";
-			message += "\"POWERTV\":\"OFF";
-			message += "\"}";
-		}
-		else {
-			flag_get_tv_state = true;
-			message += "\"POWERTV\":\"" + string((tv_state) ? "ON" : "OFF");
-			message += "\"}";
-		}
-	}
-	else if (strcmp(cmnd, "POWERCLOCK") == 0) {
-		if (strcmp(value, "ON") == 0) {
-			clock_running = true;
-			time_update_needed = true;
-		}
-		else if (strcmp(value, "OFF") == 0) {
-			clock_running = false;
-			set_sleep_time_flag = true;
-		}
-		else if (strcmp(value, "TOGGLE") == 0) {
-			clock_running = !clock_running;
-			if (clock_running) {
-				time_update_needed = true;
-			}
-			else {
-				set_sleep_time_flag = true;
-			}
-		}
-		message += "\"POWERCLOCK\":\"" + string((clock_running) ? "ON" : "OFF");
-		message += "\"}";
-	}
-	else if (strncmp(cmnd, "GROUP", 5) == 0) {
-		//group_power_flag = strtol(&cmnd[5], nullptr, 10); // more than ten (0-9) groups
-		group_power_flag = cmnd[5] - '0'; // ten (0-9) groups max
-
-		if (strcmp(value, "ON") == 0) {
-			group_power_states[group_power_flag] = true;
-		}
-		else if (strcmp(value, "OFF") == 0) {
-			//digitalWrite(LED, digitalRead(LED) == HIGH ? LOW : HIGH);
-			group_power_states[group_power_flag] = false;
-		}
-		else if (strcmp(value, "TOGGLE") == 0) {
-			group_power_states[group_power_flag] = !group_power_states[group_power_flag];
-		}
-		message += "\"GROUP";
-		message += cmnd[5];
-		message += "\":\"";
-		message += string((group_power_states[group_power_flag]) ? "ON" : "OFF");
-		message += "\"}";
-	}
-	else if (strcmp(cmnd, "CORS") == 0) {
-		if (strcmp(value, "") != 0) {
-			CORS_value = value;
-		}
-		message += "\"CORS\":\"" + CORS_value;
-		message += "\"}";
-	}
-	else {
-		//message += "\"ERROR\":\"" + inputMessage;
-		message += "\"Command\":\"Unknown";
-		message += "\"}";
-	}
-	return message;
+    if (strcmp(value, "ON") == 0) {
+      group_power_states[group_power_flag] = true;
+    }
+    else if (strcmp(value, "OFF") == 0) {
+      //digitalWrite(LED, digitalRead(LED) == HIGH ? LOW : HIGH);
+      group_power_states[group_power_flag] = false;
+    }
+    else if (strcmp(value, "TOGGLE") == 0) {
+      group_power_states[group_power_flag] = !group_power_states[group_power_flag];
+    }
+    message += "\"GROUP";
+    message += cmnd[5];
+    message += "\":\"";
+    message += string((group_power_states[group_power_flag]) ? "ON" : "OFF");
+    message += "\"}";
+  }
+  else if (strcmp(cmnd, "CORS") == 0) {
+    if (strcmp(value, "") != 0) {
+      CORS_value = value;
+    }
+    message += "\"CORS\":\"" + CORS_value;
+    message += "\"}";
+  }
+  else {
+    //message += "\"ERROR\":\"" + inputMessage;
+    message += "\"Command\":\"Unknown";
+    message += "\"}";
+  }
+  return message;
 }
 
 
 void OTA_server_initiate() {
-	ArduinoOTA.onStart([]() {
-		String type;
-		if (ArduinoOTA.getCommand() == U_FLASH) {
-			type = "sketch";
-		} else { // U_FS
-			type = "filesystem";
-		}
+  ArduinoOTA.onStart([]() {
+    String type;
+    if (ArduinoOTA.getCommand() == U_FLASH) {
+      type = "sketch";
+    } else { // U_FS
+      type = "filesystem";
+    }
 
-		// NOTE: if updating FS this would be the place to unmount FS using FS.end()
-		Serial.println("Start updating " + type);
-	});
-	ArduinoOTA.onEnd([]() {
-		Serial.println("\nEnd");
-	});
-	ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-		Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
-	});
-	
-	ArduinoOTA.onError([](ota_error_t error) {
-		Serial.printf("Error[%u]: ", error);
-		if (error == OTA_AUTH_ERROR) {
-			Serial.println("Auth Failed");
-		} else if (error == OTA_BEGIN_ERROR) {
-			Serial.println("Begin Failed");
-		} else if (error == OTA_CONNECT_ERROR) {
-			Serial.println("Connect Failed");
-		} else if (error == OTA_RECEIVE_ERROR) {
-			Serial.println("Receive Failed");
-		} else if (error == OTA_END_ERROR) {
-			Serial.println("End Failed");
-		}
-	});
-	ArduinoOTA.begin();
+    // NOTE: if updating FS this would be the place to unmount FS using FS.end()
+    Serial.println("Start updating " + type);
+  });
+  ArduinoOTA.onEnd([]() {
+    Serial.println("\nEnd");
+  });
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+  });
+  
+  ArduinoOTA.onError([](ota_error_t error) {
+    Serial.printf("Error[%u]: ", error);
+    if (error == OTA_AUTH_ERROR) {
+      Serial.println("Auth Failed");
+    } else if (error == OTA_BEGIN_ERROR) {
+      Serial.println("Begin Failed");
+    } else if (error == OTA_CONNECT_ERROR) {
+      Serial.println("Connect Failed");
+    } else if (error == OTA_RECEIVE_ERROR) {
+      Serial.println("Receive Failed");
+    } else if (error == OTA_END_ERROR) {
+      Serial.println("End Failed");
+    }
+  });
+  ArduinoOTA.begin();
 }
 
 
 void smart_devices_config_load() {
-	File f = LittleFS.open("/smart_devices.json", "r");
-	if (f) {
-		smart_devices_JSON_string = f.readString().c_str();
-		f.close();
-	}
-	else {
-		Serial.println("Failed to open config file");
-	}
+  File f = LittleFS.open("/smart_devices.json", "r");
+  if (f) {
+    smart_devices_JSON_string = f.readString().c_str();
+    f.close();
+  }
+  else {
+    Serial.println("Failed to open config file");
+  }
 }
 
 
 void web_server_initiate() {
-	web_server.on("/cm", HTTP_GET, [](AsyncWebServerRequest *request) {
-		string message;
-		if (request->hasParam(PARAM_INPUT_1)) {
-			String inputMessage = request->getParam(PARAM_INPUT_1)->value();
-			unsigned int len = inputMessage.length();
-			len = (len < MAX_PARAMETER_SIZE) ? len : MAX_PARAMETER_SIZE;
-			char buf[len+1];
-			inputMessage.toCharArray(buf, len+1); // toCharArray copies inputMessage then adds \0 or the first MAX_PARAMETER_SIZE chars from inputMessage then adds \0
-			message = process_cmnd(buf);
-		}
-		else {
-			message = "{}";
-		}
+  web_server.on("/cm", HTTP_GET, [](AsyncWebServerRequest *request) {
+    string message;
+    if (request->hasParam(PARAM_INPUT_1)) {
+      String inputMessage = request->getParam(PARAM_INPUT_1)->value();
+      unsigned int len = inputMessage.length();
+      len = (len < MAX_PARAMETER_SIZE) ? len : MAX_PARAMETER_SIZE;
+      char buf[len+1];
+      inputMessage.toCharArray(buf, len+1); // toCharArray copies inputMessage then adds \0 or the first MAX_PARAMETER_SIZE chars from inputMessage then adds \0
+      message = process_cmnd(buf);
+    }
+    else {
+      message = "{}";
+    }
 
-		AsyncWebServerResponse *response = request->beginResponse(200, "application/json", message.c_str());
-		response->addHeader("Access-Control-Allow-Origin", CORS_value.c_str());
-		request->send(response);
-	});
+    AsyncWebServerResponse *response = request->beginResponse(200, "application/json", message.c_str());
+    response->addHeader("Access-Control-Allow-Origin", CORS_value.c_str());
+    request->send(response);
+  });
 
 
-	web_server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
-		//request->send_P(200, "text/html", index_html);
-		request->send(LittleFS, "/index.html");
-	});
+  web_server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+    //request->send_P(200, "text/html", index_html);
+    request->send(LittleFS, "/index.html");
+  });
 
-	web_server.on("/smart_devices.json", HTTP_GET, [](AsyncWebServerRequest *request) {
-		AsyncWebServerResponse *response = request->beginResponse(200, "application/json", smart_devices_JSON_string.c_str());
-		response->addHeader("Access-Control-Allow-Origin", CORS_value.c_str());
-		request->send(response);
-	});
+  web_server.on("/smart_devices.json", HTTP_GET, [](AsyncWebServerRequest *request) {
+    AsyncWebServerResponse *response = request->beginResponse(200, "application/json", smart_devices_JSON_string.c_str());
+    response->addHeader("Access-Control-Allow-Origin", CORS_value.c_str());
+    request->send(response);
+  });
 
-	web_server.on("/TV", HTTP_GET, [](AsyncWebServerRequest *request) {
-		request->send(LittleFS, "/TV_IR.html");
-	});
+  web_server.on("/TV", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->send(LittleFS, "/TV_IR.html");
+  });
 
-	web_server.on("/TV_ECP", HTTP_GET, [](AsyncWebServerRequest *request) {
-		request->send(LittleFS, "/TV_ECP.html");
-	});
+  web_server.on("/TV_ECP", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->send(LittleFS, "/TV_ECP.html");
+  });
 
-	web_server.on("/console", HTTP_GET, [](AsyncWebServerRequest *request) {
-		request->send(LittleFS, "/console.html");
-	});
+  web_server.on("/console", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->send(LittleFS, "/console.html");
+  });
 
-	web_server.on("/access_log", HTTP_GET, [](AsyncWebServerRequest *request) {
-		request->send(LittleFS, "/access_log.html");
-	});
+  web_server.on("/access_log", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->send(LittleFS, "/access_log.html");
+  });
 
-	web_server.on("/access_logP.txt", HTTP_GET, [](AsyncWebServerRequest *request) {
-		//access_logP.txt might not exist yet, so prepare a blank string to return
-		String content = "";
-		File f = LittleFS.open("/access_logP.txt", "r");
-		if (f) {
-			content = f.readString().c_str();
-			f.close();
-		}
-		AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", content);
-		response->addHeader("Access-Control-Allow-Origin", CORS_value.c_str());
-		request->send(response);
-	});
+  web_server.on("/access_logP.txt", HTTP_GET, [](AsyncWebServerRequest *request) {
+    //access_logP.txt might not exist yet, so prepare a blank string to return
+    String content = "";
+    File f = LittleFS.open("/access_logP.txt", "r");
+    if (f) {
+      content = f.readString().c_str();
+      f.close();
+    }
+    AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", content);
+    response->addHeader("Access-Control-Allow-Origin", CORS_value.c_str());
+    request->send(response);
+  });
 
-	web_server.on("/access_logC.txt", HTTP_GET, [](AsyncWebServerRequest *request) {
-		String content = "";
-		File f = LittleFS.open("/access_logC.txt", "r");
-		if (f) {
-			content = f.readString().c_str();
-			f.close();
-		}
-		AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", content);
-		response->addHeader("Access-Control-Allow-Origin", CORS_value.c_str());
-		request->send(response);
-	});
+  web_server.on("/access_logC.txt", HTTP_GET, [](AsyncWebServerRequest *request) {
+    String content = "";
+    File f = LittleFS.open("/access_logC.txt", "r");
+    if (f) {
+      content = f.readString().c_str();
+      f.close();
+    }
+    AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", content);
+    response->addHeader("Access-Control-Allow-Origin", CORS_value.c_str());
+    request->send(response);
+  });
 
-	//OTA update through web interface
-	web_server.on("/select_bin", HTTP_GET, [](AsyncWebServerRequest *request) {
-		request->send(LittleFS, "/select_bin.html");
-	});
+  //OTA update through web interface
+  web_server.on("/select_bin", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->send(LittleFS, "/select_bin.html");
+  });
 
-	web_server.on("/restart", HTTP_GET, [](AsyncWebServerRequest *request) {
-		request->send(LittleFS, "/restart.html");
-		restart_needed = true;
-	});
+  web_server.on("/restart", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->send(LittleFS, "/restart.html");
+    restart_needed = true;
+  });
 
-	//OTA update via web page
-	//AsyncCallbackWebHandler& on(const char* uri, WebRequestMethodComposite method, ArRequestHandlerFunction onRequest, ArUploadHandlerFunction onUpload);
-	web_server.on("/flash_bin", HTTP_POST, [](AsyncWebServerRequest *request) {}, handle_flash_bin);
+  //OTA update via web page
+  //AsyncCallbackWebHandler& on(const char* uri, WebRequestMethodComposite method, ArRequestHandlerFunction onRequest, ArUploadHandlerFunction onUpload);
+  web_server.on("/flash_bin", HTTP_POST, [](AsyncWebServerRequest *request) {}, handle_flash_bin);
 
-	// Using an older version of fauxmo library because I want smart sockets not smart bulbs.
-	// Using fauxmo smart sockets lets me tell Alexa to turn off all the lights without affecting all fauxmo devices.
-	// The following are for the newer fauxmo library:
-	//// fauxmo: These two callbacks are required for gen1 and gen3 compatibility
-	//web_server.onRequestBody([](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
-	//	if (fauxmo.process(request->client(), request->method() == HTTP_GET, request->url(), String((char *)data)))
-	//		return;
-	//	// Handle any other body request here...
-	//});
-	//web_server.onNotFound([](AsyncWebServerRequest *request) {
-	//	String body = (request->hasParam("body", true)) ? request->getParam("body", true)->value() : String();
-	//	if (fauxmo.process(request->client(), request->method() == HTTP_GET, request->url(), body))
-	//		return;
-	//	request->send_P(404, "text/html", "404");
-	//});
+  // Using an older version of fauxmo library because I want smart sockets not smart bulbs.
+  // Using fauxmo smart sockets lets me tell Alexa to turn off all the lights without affecting all fauxmo devices.
+  // The following are for the newer fauxmo library:
+  //// fauxmo: These two callbacks are required for gen1 and gen3 compatibility
+  //web_server.onRequestBody([](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+  //  if (fauxmo.process(request->client(), request->method() == HTTP_GET, request->url(), String((char *)data)))
+  //    return;
+  //  // Handle any other body request here...
+  //});
+  //web_server.onNotFound([](AsyncWebServerRequest *request) {
+  //  String body = (request->hasParam("body", true)) ? request->getParam("body", true)->value() : String();
+  //  if (fauxmo.process(request->client(), request->method() == HTTP_GET, request->url(), body))
+  //    return;
+  //  request->send_P(404, "text/html", "404");
+  //});
 
-	web_server.begin();
+  web_server.begin();
 }
 
 
 void webserial_initiate() {
-	websocket = new AsyncWebSocket("/consolews");
-	websocket->onEvent([&](AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len) -> void {
-		if (type == WS_EVT_DATA) {
-			len = (len < MAX_PARAMETER_SIZE) ? len : MAX_PARAMETER_SIZE;
-			char buf[len+1];
-			uint8_t i = 0;
-			for(i = 0; i < len; i++){
-				buf[i] = char(data[i]);
-			}
-			buf[i] = '\0';
+  websocket = new AsyncWebSocket("/consolews");
+  websocket->onEvent([&](AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len) -> void {
+    if (type == WS_EVT_DATA) {
+      len = (len < MAX_PARAMETER_SIZE) ? len : MAX_PARAMETER_SIZE;
+      char buf[len+1];
+      uint8_t i = 0;
+      for(i = 0; i < len; i++){
+        buf[i] = char(data[i]);
+      }
+      buf[i] = '\0';
 
-			//write_log(buf);
-			//can get sent #c or #c @P (not sure what @P means or why it is sent)
-			if (strncmp(buf, "#c", 2) != 0) {
-				process_cmnd(buf);
-			}
-			else {
-				//received #c (call) reply with #r (response)
-				WebSerial.print("#r");
-			}
-		}
-	});
+      //write_log(buf);
+      //can get sent #c or #c @P (not sure what @P means or why it is sent)
+      if (strncmp(buf, "#c", 2) != 0) {
+        process_cmnd(buf);
+      }
+      else {
+        //received #c (call) reply with #r (response)
+        WebSerial.print("#r");
+      }
+    }
+  });
 
-	web_server.addHandler(websocket);
-	WebSerial._ws = websocket;
+  web_server.addHandler(websocket);
+  WebSerial._ws = websocket;
 }
 
 
 //using an older version of Fauxmo library because I want smart sockets not smart bulbs. Using fauxmo smart sockets lets me tell Alexa to turn off all the lights without affecting fauxmo devices.
 void fauxmo_initiate() {
-	// You have to call enable(true) once you have a WiFi connection
-	// You can enable or disable the library at any moment
-	// Disabling it will prevent the devices from being discovered and switched
-	fauxmo.enable(true);
+  // You have to call enable(true) once you have a WiFi connection
+  // You can enable or disable the library at any moment
+  // Disabling it will prevent the devices from being discovered and switched
+  fauxmo.enable(true);
 
-	// Add virtual devices
-	fauxmo.addDevice("TV");
-	//fauxmo.addDevice("Pause"); // not understood well by Alexa
-	//fauxmo.addDevice("Show"); // not understood well by Alexa
-	//fauxmo.addDevice("Hold"); // not understood well by Alexa
-	fauxmo.addDevice("Idle");
-	fauxmo.addDevice("Clock");
+  // Add virtual devices
+  fauxmo.addDevice("TV");
+  //fauxmo.addDevice("Pause"); // not understood well by Alexa
+  //fauxmo.addDevice("Show"); // not understood well by Alexa
+  //fauxmo.addDevice("Hold"); // not understood well by Alexa
+  fauxmo.addDevice("Idle");
+  fauxmo.addDevice("Clock");
 
-	fauxmo.onSetState([](unsigned char device_id, const char * device_name, bool state) {
-		//DEBUG_PRINTLN("Device #%d (%s) state: %s\n", device_id, device_name, state ? "ON" : "OFF");
-		//digitalWrite(LED, !state);
-		if (0 == device_id) {
-			tv_state = state;
-			if (state) {
-				sc = SC_TV_ON;
-			}
-			else {
-				sc = SC_TV_OFF;
-			}
-		}
-		else if (1 == device_id) {
-			pause_state = state;
-			sc = SC_PLAYPAUSE;
-		}
-		else if (2 == device_id) {
-			clock_running = state;
-			if (state) {
-				sc = SC_CLOCK_ON;
-			}
-			else {
-				sc = SC_CLOCK_OFF;
-			}
-		}
-		else {
-			sc = SC_DO_NOTHING;
-		}
-	});
+  fauxmo.onSetState([](unsigned char device_id, const char * device_name, bool state) {
+    //DEBUG_PRINTLN("Device #%d (%s) state: %s\n", device_id, device_name, state ? "ON" : "OFF");
+    //digitalWrite(LED, !state);
+    if (0 == device_id) {
+      tv_state = state;
+      if (state) {
+        sc = SC_TV_ON;
+      }
+      else {
+        sc = SC_TV_OFF;
+      }
+    }
+    else if (1 == device_id) {
+      pause_state = state;
+      sc = SC_PLAYPAUSE;
+    }
+    else if (2 == device_id) {
+      clock_running = state;
+      if (state) {
+        sc = SC_CLOCK_ON;
+      }
+      else {
+        sc = SC_CLOCK_OFF;
+      }
+    }
+    else {
+      sc = SC_DO_NOTHING;
+    }
+  });
 
-	// Callback to retrieve current state (for GetBinaryState queries)
-	fauxmo.onGetState([](unsigned char device_id, const char * device_name) {
-		bool state = false;
-		if (0 == device_id) {
-			state = tv_state;
-		}
-		else if (1 == device_id) {
-			state = pause_state;
-		}
-		else if (2 == device_id) {
-			state = clock_running;
-		}
-		else {
-			sc = SC_DO_NOTHING;
-		}
-		return state;
-	});
+  // Callback to retrieve current state (for GetBinaryState queries)
+  fauxmo.onGetState([](unsigned char device_id, const char * device_name) {
+    bool state = false;
+    if (0 == device_id) {
+      state = tv_state;
+    }
+    else if (1 == device_id) {
+      state = pause_state;
+    }
+    else if (2 == device_id) {
+      state = clock_running;
+    }
+    else {
+      sc = SC_DO_NOTHING;
+    }
+    return state;
+  });
 }
 
 
 void clock_initiate() {
-	// instead of using FastLED to manage the POWER used we calculate the max brightness one time below
-	//FastLED.setMaxPowerInVoltsAndMilliamps(LED_STRIP_VOLTAGE, LED_STRIP_MILLIAMPS);
-	FastLED.setCorrection(TypicalPixelString);
-	FastLED.addLeds<WS2812B, DATA_PIN, COLOR_ORDER>(leds, NUM_LEDS);
+  // instead of using FastLED to manage the POWER used we calculate the max brightness one time below
+  //FastLED.setMaxPowerInVoltsAndMilliamps(LED_STRIP_VOLTAGE, LED_STRIP_MILLIAMPS);
+  FastLED.setCorrection(TypicalPixelString);
+  FastLED.addLeds<WS2812B, DATA_PIN, COLOR_ORDER>(leds, NUM_LEDS);
 
-	//determine the maximum brightness allowed within POWER limits if 6, 9, 12, and 3 o'clock are a third brightness, and
-	//the hour and minute hands are max brightness
-	FastLED.clear();
-	leds[0] = CHSV(0, 0, 85);
-	leds[3] = CHSV(0, 0, 85);
-	leds[6] = CHSV(0, 0, 85);
-	leds[9] = CHSV(0, 0, 85);
-	leds[1] = CHSV(0, 0, 255);
-	leds[11] = CHSV(0, 0, 255);
-	max_brightness = calculate_max_brightness_for_power_vmA(leds, NUM_LEDS, 255, LED_STRIP_VOLTAGE, LED_STRIP_MILLIAMPS);
-	FastLED.clear();
+  //determine the maximum brightness allowed within POWER limits if 6, 9, 12, and 3 o'clock are a third brightness, and
+  //the hour and minute hands are max brightness
+  FastLED.clear();
+  leds[0] = CHSV(0, 0, 85);
+  leds[3] = CHSV(0, 0, 85);
+  leds[6] = CHSV(0, 0, 85);
+  leds[9] = CHSV(0, 0, 85);
+  leds[1] = CHSV(0, 0, 255);
+  leds[11] = CHSV(0, 0, 255);
+  max_brightness = calculate_max_brightness_for_power_vmA(leds, NUM_LEDS, 255, LED_STRIP_VOLTAGE, LED_STRIP_MILLIAMPS);
+  FastLED.clear();
 
-	strip.Begin();
-	strip.Show(); // Set to black (^= off) after reset
+  strip.Begin();
+  strip.Show(); // Set to black (^= off) after reset
 
-	configTime(TZ_America_New_York, "pool.ntp.org");
+  configTime(TZ_America_New_York, "pool.ntp.org");
 
-	update_time(2);
+  update_time(2);
 
 }
 
 void ping_initiate() {
-	// callback for each answer/timeout of each ping
-	PingPhone.on(true, [](const AsyncPingResponse& response) {
-		// only need one response to confirm device is present
-		// but need multiple timeouts to confirm device is actually away
-		if (response.answer) {
-			return true; // if any more ping requests are queued, then cancel them
-		}
-		return false; // if any more ping requests are queued, then continue with them. 
-	});
+  // callback for each answer/timeout of each ping
+  PingPhone.on(true, [](const AsyncPingResponse& response) {
+    // only need one response to confirm device is present
+    // but need multiple timeouts to confirm device is actually away
+    if (response.answer) {
+      return true; // if any more ping requests are queued, then cancel them
+    }
+    return false; // if any more ping requests are queued, then continue with them. 
+  });
 
-	// callback after all pings complete
-	PingPhone.on(false, [](const AsyncPingResponse& response) {
-		previous_phone_state = phone_state;
-		pd_trigger = PD_Triggers::PHONE;
-		if (response.answer) {
-			phone_state = PhoneStates::HERE;
-		}
-		else {
-			phone_state = PhoneStates::AWAY;
-		}
-		return false; // return value does not matter here
-	});
+  // callback after all pings complete
+  PingPhone.on(false, [](const AsyncPingResponse& response) {
+    previous_phone_state = phone_state;
+    pd_trigger = PD_Triggers::PHONE;
+    if (response.answer) {
+      phone_state = PhoneStates::HERE;
+    }
+    else {
+      phone_state = PhoneStates::AWAY;
+    }
+    return false; // return value does not matter here
+  });
 
-	PingPhone.begin(phone_ip, NUM_PINGS, PING_TIMEOUT);
-	
-	// callback for each answer/timeout of each ping
-	PingTV.on(true, [](const AsyncPingResponse& response) {
-		// only need one response to confirm device is present
-		// but need multiple timeouts to confirm device is actually away
-		if (response.answer) {
-			return true; // if any more ping requests are queued, then cancel them
-		}
-		return false; // if any more ping requests are queued, then continue with them. 
-	});
+  PingPhone.begin(phone_ip, NUM_PINGS, PING_TIMEOUT);
+  
+  // callback for each answer/timeout of each ping
+  PingTV.on(true, [](const AsyncPingResponse& response) {
+    // only need one response to confirm device is present
+    // but need multiple timeouts to confirm device is actually away
+    if (response.answer) {
+      return true; // if any more ping requests are queued, then cancel them
+    }
+    return false; // if any more ping requests are queued, then continue with them. 
+  });
 
-	// callback after all pings complete
-	PingTV.on(false, [](const AsyncPingResponse& response) {
-		if (response.answer) {
-			// the normal mode of operation is for the client's browser to query all of the devices
-			// however the TV's web sever does set CORS in the header so the browser blocks the result of the device-info query
-			// as a workaround we use our SmartHomeControl device to make the query for us, since it does not respect CORS
-			// cb_tv callbacks will set tv_state
-			ahClient.init("GET", TV_QUERY_URL, &cb_tv_query_data, &cb_tv_query_offline);
-			ahClient.send();
-		}
-		else {
-			tv_state = false;
-		}
-		return false; // return value does not matter here
-	});
+  // callback after all pings complete
+  PingTV.on(false, [](const AsyncPingResponse& response) {
+    if (response.answer) {
+      // the normal mode of operation is for the client's browser to query all of the devices
+      // however the TV's web sever does set CORS in the header so the browser blocks the result of the device-info query
+      // as a workaround we use our SmartHomeControl device to make the query for us, since it does not respect CORS
+      // cb_tv callbacks will set tv_state
+      ahClient.init("GET", TV_QUERY_URL, &cb_tv_query_data, &cb_tv_query_offline);
+      ahClient.send();
+    }
+    else {
+      tv_state = false;
+    }
+    return false; // return value does not matter here
+  });
 
-	PingTV.begin(tv_ip, NUM_PINGS, PING_TIMEOUT);
+  PingTV.begin(tv_ip, NUM_PINGS, PING_TIMEOUT);
 }
 
 void setup() {
-	pinMode(LED, OUTPUT);
-	digitalWrite(LED, HIGH); // Our LED has inverse logic (high for OFF, low for ON)
+  pinMode(LED, OUTPUT);
+  digitalWrite(LED, HIGH); // Our LED has inverse logic (high for OFF, low for ON)
 
-	Serial.begin(115200);
+  Serial.begin(115200);
 
-	OTA_server_initiate();
+  OTA_server_initiate();
 
-	if (!WiFi.config(LOCAL_IP, GATEWAY, SUBNET_MASK, DNS1, DNS2)) {
-		Serial.println("WiFi config failed.");
-	}
+  if (!WiFi.config(LOCAL_IP, GATEWAY, SUBNET_MASK, DNS1, DNS2)) {
+    Serial.println("WiFi config failed.");
+  }
 
-	if (WiFi.SSID() != ssid) {
-		WiFi.mode(WIFI_STA);
-		WiFi.begin(ssid, password);
-		WiFi.persistent(true);
-		WiFi.setAutoConnect(true);
-		WiFi.setAutoReconnect(true);
-	}
+  if (WiFi.SSID() != ssid) {
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(ssid, password);
+    WiFi.persistent(true);
+    WiFi.setAutoConnect(true);
+    WiFi.setAutoReconnect(true);
+  }
 
-	if (WiFi.waitForConnectResult() != WL_CONNECTED) {
-		Serial.println(F("Connection Failed!"));
+  if (WiFi.waitForConnectResult() != WL_CONNECTED) {
+    Serial.println(F("Connection Failed!"));
 
-		WiFi.begin(ssid, password);
-		Serial.println(F(""));
-		Serial.print(F("WiFi connecting"));
-		while (WiFi.status() != WL_CONNECTED) {
-			delay(500);
-			Serial.print(F("."));
-		}
-		Serial.println(F(""));
-		Serial.print(F("Connected: "));
-		Serial.println(WiFi.localIP());
-	}
+    WiFi.begin(ssid, password);
+    Serial.println(F(""));
+    Serial.print(F("WiFi connecting"));
+    while (WiFi.status() != WL_CONNECTED) {
+      delay(500);
+      Serial.print(F("."));
+    }
+    Serial.println(F(""));
+    Serial.print(F("Connected: "));
+    Serial.println(WiFi.localIP());
+  }
 
-	if (!LittleFS.begin()) {
-		Serial.println("Failed to mount file system");
-		// something is very broken. don't continue, but still allow OTA updates.
-		while(true) {
-			ArduinoOTA.handle();
-		}
-	}
+  if (!LittleFS.begin()) {
+    Serial.println("Failed to mount file system");
+    // something is very broken. don't continue, but still allow OTA updates.
+    while(true) {
+      ArduinoOTA.handle();
+    }
+  }
 
-	smart_devices_config_load();
-	web_server_initiate();
-	webserial_initiate();
-	ping_initiate();
+  smart_devices_config_load();
+  web_server_initiate();
+  webserial_initiate();
+  ping_initiate();
 
-	rf_switch.enableReceive(digitalPinToInterrupt(12)); //D6 on HiLetgo ESLittleFS.remove("/access_logP.txt");P8266
-	irsend.begin();
-	fauxmo_initiate();
-	clock_initiate();
+  rf_switch.enableReceive(digitalPinToInterrupt(12)); //D6 on HiLetgo ESLittleFS.remove("/access_logP.txt");P8266
+  irsend.begin();
+  fauxmo_initiate();
+  clock_initiate();
 
-	Serial.print("hour: ");
-	Serial.println(local_now->tm_hour);
-	Serial.print("minute: ");
-	Serial.println(local_now->tm_min);
+  Serial.print("hour: ");
+  Serial.println(local_now->tm_hour);
+  Serial.print("minute: ");
+  Serial.println(local_now->tm_min);
 
 
-	// a WebSerial message sent here likely won't make it to the console because the client won't have established a connection yet
-	DEBUG_CONSOLE.println("SmartHomeControl - Power On");
-	write_log("SHC on");
+  // a WebSerial message sent here likely won't make it to the console because the client won't have established a connection yet
+  DEBUG_CONSOLE.println("SmartHomeControl - Power On");
+  write_log("SHC on");
 
 /*
-	Dir dir = LittleFS.openDir("/");
-	while (dir.next()) {
-		DEBUG_CONSOLE.println(dir.fileName());
-		write_log(dir.fileName());
-		if(dir.fileSize()) {
-			File f = dir.openFile("r");
-			DEBUG_CONSOLE.println(f.size());
-			size_t s = f.size();
-			char str[6];
-			snprintf(str, sizeof str, "%zu", s);
-			write_log(str);
-		}
-	}
+  Dir dir = LittleFS.openDir("/");
+  while (dir.next()) {
+    DEBUG_CONSOLE.println(dir.fileName());
+    write_log(dir.fileName());
+    if(dir.fileSize()) {
+      File f = dir.openFile("r");
+      DEBUG_CONSOLE.println(f.size());
+      size_t s = f.size();
+      char str[6];
+      snprintf(str, sizeof str, "%zu", s);
+      write_log(str);
+    }
+  }
 */
 
-	//ESP.wdtEnable(4000); //[ms], parameter is required but ignored
+  //ESP.wdtEnable(4000); //[ms], parameter is required but ignored
 }
 
 
 void loop() {
-	static uint32_t pm = millis(); // previous millis
-	if ((millis() - pm) >= 2000) {
-		pm = millis();
-		Serial.println(ESP.getFreeHeap(),DEC);
-	}
+  //ESP.wdtFeed();
+  ArduinoOTA.handle();
 
-	//ESP.wdtFeed();
-	ArduinoOTA.handle();
+  if (restart_needed || WiFi.status() != WL_CONNECTED) {
+    web_server.removeHandler(websocket); // prevents reconnection before restart?
+    websocket->closeAll();
+    // need a delay here for OTA update to finish and for websocket to completely close
+    delay(2000);
+    ESP.restart();
+  }
 
-	if (restart_needed || WiFi.status() != WL_CONNECTED) {
-		web_server.removeHandler(websocket); // prevents reconnection before restart?
-		websocket->closeAll();
-		// need a delay here for OTA update to finish and for websocket to completely close
-		delay(2000);
-		ESP.restart();
-	}
-
-	handle_clock();
-	handle_RF_command();
-	handle_presence_detection();
-	// fauxmoESP uses an async TCP server, but also a sync UDP server; therefore, we have to manually poll for UDP packets.
-	fauxmo.handle();
-	handle_smart_speaker_command();
-	handle_group_power_command();
-	get_tv_state();
-	transmit_IR_data(); // other commands set ir_data so it's logical to have transmit_IR_data() last
+  handle_clock();
+  handle_RF_command();
+  handle_presence_detection();
+  // fauxmoESP uses an async TCP server, but also a sync UDP server; therefore, we have to manually poll for UDP packets.
+  fauxmo.handle();
+  handle_smart_speaker_command();
+  handle_group_power_command();
+  get_tv_state();
+  transmit_IR_data(); // other commands set ir_data so it's logical to have transmit_IR_data() last
 
 }
