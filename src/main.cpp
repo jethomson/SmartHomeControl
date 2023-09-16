@@ -850,9 +850,11 @@ void write_log(String data) {
 	if (f) {
 		size_t fsize = f.size();
 		f.close();
-		// if full (about 100 lines) rotate log files
-		if (fsize > 3500) {
-		//if (fsize > 1000) {
+		//if fsize is too big the access log will include garbage
+		//if (fsize > 2000) { // corruption.
+		//if (fsize > 1900) { // seems ok
+		// if full, rotate log files
+		if (fsize > 1750) { // about 100 lines, no corruption.
 			LittleFS.remove("/access_logP.txt");
 			LittleFS.rename("/access_logC.txt", "/access_logP.txt");
 		}
