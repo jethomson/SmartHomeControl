@@ -5,7 +5,9 @@ This is a Swiss army knife of a ESP8266 project. It is born from the desire to p
 2) Creates a web interface for controlling a TV with an IR blaster.
 3) Simulates Wemo devices with Fauxmo to allow voice control using an Echo device.
 4) Controls devices based on 433 MHz RF signals received.
-5) Runs an LED ring clock.
+5) Runs an LED ring clock that is updated via NTP and adjusts for Daylight Saving Time.
+6) Does presence detection by pinging my smart phone.
+7) Sends notifications via SMTP to my phone's SMS email address. No ports to open, servers to run, apps to install, or notifications to enable.
 
 Your ESP8266 can be programmed over the air in a couple of ways:
 
